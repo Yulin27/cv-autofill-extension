@@ -1,0 +1,30 @@
+# Node modules (if any dependencies added later)
+node_modules/
+
+# Generated icons (users generate these)
+icons/icon16.png
+icons/icon48.png
+icons/icon128.png
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+.cache/
+
+# User data (never commit)
+*.env
+secrets.json
+
+CLAUDE.md
