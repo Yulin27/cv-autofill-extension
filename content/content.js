@@ -42,14 +42,24 @@ class AutoFiller {
         import(chrome.runtime.getURL('config/config.js'))
       ]);
 
-      // Get API key from storage
-      const apiKey = await StorageManager.getAPIKey();
-      if (!apiKey) {
-        throw new Error('API key not configured. Please set your OpenAI API key in the extension popup.');
+      // Get provider and API key from storage
+      const provider = await StorageManager.getLLMProvider();
+      let apiKey;
+      if (provider === 'anthropic') {
+        apiKey = await StorageManager.getAnthropicAPIKey();
+      } else if (provider === 'groq') {
+        apiKey = await StorageManager.getGroqAPIKey();
+      } else {
+        apiKey = await StorageManager.getAPIKey();
       }
 
-      // Initialize LLM client
-      this.llmClient = new LLMClient(apiKey);
+      if (!apiKey) {
+        const providerName = provider === 'anthropic' ? 'Anthropic' : provider === 'groq' ? 'Groq' : 'OpenAI';
+        throw new Error(`API key not configured. Please set your ${providerName} API key in the extension popup.`);
+      }
+
+      // Initialize LLM client with provider
+      this.llmClient = new LLMClient(apiKey, provider);
 
       // Initialize agents
       this.formDetector = new FormDetector();

@@ -9,7 +9,9 @@
     "scripting"
   ],
   "host_permissions": [
-    "https://api.openai.com/*"
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://cdnjs.cloudflare.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -37,7 +39,17 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["config/config.js"],
+      "resources": [
+        "config/config.js",
+        "lib/pdf.min.js",
+        "lib/pdf.worker.min.js",
+        "lib/pdf.min.mjs",
+        "lib/pdf.worker.min.mjs",
+        "lib/pdf-loader.js",
+        "content/*.js",
+        "core/*.js",
+        "utils/*.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

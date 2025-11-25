@@ -1,0 +1,42 @@
+services:
+  # Web service (FastAPI backend)
+  - type: web
+    name: cv-autofill-api
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cv-autofill-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: cv-autofill-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+
+databases:
+  # PostgreSQL database
+  - name: cv-autofill-db
+    databaseName: cv_autofill
+    user: cv_autofill_user
+    plan: free
+    region: oregon
+
+  # Redis cache
+  - name: cv-autofill-redis
+    plan: free
+    region: oregon
+    type: redis
+    maxmemoryPolicy: allkeys-lru

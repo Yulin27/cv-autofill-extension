@@ -16,17 +16,61 @@
 
     <!-- API Key Section -->
     <section class="section api-section">
-      <h2>OpenAI API Configuration</h2>
-      <div class="input-group">
-        <input
-          type="password"
-          id="apiKey"
-          placeholder="Enter your OpenAI API key (sk-...)"
-          autocomplete="off"
-        >
-        <button id="toggleApiKey" class="icon-btn" title="Show/Hide API Key">👁️</button>
+      <h2>LLM API Configuration</h2>
+
+      <!-- Provider Selection -->
+      <div class="provider-selection">
+        <label for="llmProvider">Select Provider:</label>
+        <select id="llmProvider" class="provider-select">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="groq">Groq</option>
+        </select>
       </div>
-      <button id="saveApiKey" class="btn btn-primary">Save API Key</button>
+
+      <!-- OpenAI API Key -->
+      <div id="openaiKeySection" class="api-key-section">
+        <label for="openaiApiKey">OpenAI API Key:</label>
+        <div class="input-group">
+          <input
+            type="password"
+            id="openaiApiKey"
+            placeholder="Enter your OpenAI API key (sk-...)"
+            autocomplete="off"
+          >
+          <button id="toggleOpenaiApiKey" class="icon-btn" title="Show/Hide API Key">👁️</button>
+        </div>
+      </div>
+
+      <!-- Anthropic API Key -->
+      <div id="anthropicKeySection" class="api-key-section" style="display: none;">
+        <label for="anthropicApiKey">Anthropic API Key:</label>
+        <div class="input-group">
+          <input
+            type="password"
+            id="anthropicApiKey"
+            placeholder="Enter your Anthropic API key (sk-ant-...)"
+            autocomplete="off"
+          >
+          <button id="toggleAnthropicApiKey" class="icon-btn" title="Show/Hide API Key">👁️</button>
+        </div>
+      </div>
+
+      <!-- Groq API Key -->
+      <div id="groqKeySection" class="api-key-section" style="display: none;">
+        <label for="groqApiKey">Groq API Key:</label>
+        <div class="input-group">
+          <input
+            type="password"
+            id="groqApiKey"
+            placeholder="Enter your Groq API key (gsk_...)"
+            autocomplete="off"
+          >
+          <button id="toggleGroqApiKey" class="icon-btn" title="Show/Hide API Key">👁️</button>
+        </div>
+      </div>
+
+      <button id="saveApiKey" class="btn btn-primary">Save Configuration</button>
       <div id="apiKeyStatus" class="status-indicator"></div>
     </section>
 

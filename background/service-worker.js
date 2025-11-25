@@ -3,36 +3,57 @@
  * Handles CV parsing, storage operations, and background tasks
  */
 
-// Import required modules
-import { extractTextFromPDF } from '../utils/pdf-parser.js';
-import { LLMClient } from '../core/llm-client.js';
-import { CVParser } from '../core/cv-parser.js';
-import { StorageManager } from '../core/storage-manager.js';
+console.log('[SERVICE-WORKER] ========================================');
+console.log('[SERVICE-WORKER] Service worker script starting to load...');
+console.log('[SERVICE-WORKER] ========================================');
 
-console.log('Background service worker loaded');
+// Import required modules - static imports for service worker
+console.log('[SERVICE-WORKER] Importing modules...');
+import { extractTextFromPDF } from '../utils/pdf-parser.js';
+console.log('[SERVICE-WORKER] ✓ pdf-parser imported');
+
+import { LLMClient } from '../core/llm-client.js';
+console.log('[SERVICE-WORKER] ✓ llm-client imported');
+
+import { CVParser } from '../core/cv-parser.js';
+console.log('[SERVICE-WORKER] ✓ cv-parser imported');
+
+import { StorageManager } from '../core/storage-manager.js';
+console.log('[SERVICE-WORKER] ✓ storage-manager imported');
+
+console.log('[SERVICE-WORKER] ✓✓✓ All modules loaded successfully');
+console.log('[SERVICE-WORKER] Background service worker ready and listening for messages');
 
 /**
  * Handle messages from popup and content scripts
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Received message:', request.action);
+  console.log('[SERVICE-WORKER] ========================================');
+  console.log('[SERVICE-WORKER] Message received!');
+  console.log('[SERVICE-WORKER] Action:', request.action);
+  console.log('[SERVICE-WORKER] Sender:', sender.tab ? `Tab ${sender.tab.id}` : 'Extension popup');
+  console.log('[SERVICE-WORKER] ========================================');
 
   // Handle different actions
   if (request.action === 'parseCVFromPDF') {
+    console.log('[SERVICE-WORKER] Handling parseCVFromPDF action...');
     handleParseCVFromPDF(request, sendResponse);
     return true; // Keep channel open for async response
   }
 
   if (request.action === 'testAPIKey') {
+    console.log('[SERVICE-WORKER] Handling testAPIKey action...');
     handleTestAPIKey(request, sendResponse);
     return true;
   }
 
   if (request.action === 'getStatus') {
+    console.log('[SERVICE-WORKER] Handling getStatus action...');
     handleGetStatus(sendResponse);
     return true;
   }
 
+  console.warn('[SERVICE-WORKER] Unknown action:', request.action);
   return false;
 });
 
@@ -42,37 +63,66 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  * @param {Function} sendResponse - Response callback
  */
 async function handleParseCVFromPDF(request, sendResponse) {
+  const startTime = Date.now();
   try {
-    console.log('Starting CV parsing process...');
+    console.log('\n========================================');
+    console.log('[SERVICE-WORKER] Starting CV parsing process...');
+    console.log('[SERVICE-WORKER] Provider:', request.provider || 'openai');
+    console.log('========================================\n');
 
     // Convert array back to Uint8Array
+    console.log('[SERVICE-WORKER] Step 1/5: Converting PDF data...');
     const pdfData = new Uint8Array(request.pdfData);
+    console.log('[SERVICE-WORKER] ✓ PDF data converted:', pdfData.length, 'bytes');
 
     // Extract text from PDF
-    console.log('Extracting text from PDF...');
+    console.log('\n[SERVICE-WORKER] Step 2/5: Extracting text from PDF...');
+    const extractStart = Date.now();
     const cvText = await extractTextFromPDF(pdfData.buffer);
+    const extractTime = Date.now() - extractStart;
+    console.log(`[SERVICE-WORKER] ✓ Text extraction completed in ${extractTime}ms`);
 
     if (!cvText || cvText.length < 50) {
       throw new Error('Extracted text is too short or empty. Please check your PDF.');
     }
 
-    console.log(`Extracted ${cvText.length} characters from PDF`);
+    console.log(`[SERVICE-WORKER] ✓ Extracted ${cvText.length} characters from PDF`);
+    console.log('[SERVICE-WORKER] First 200 chars:', cvText.substring(0, 200) + '...');
 
     // Save raw text
+    console.log('\n[SERVICE-WORKER] Step 3/5: Saving raw CV text to storage...');
     await StorageManager.saveCVText(cvText);
+    console.log('[SERVICE-WORKER] ✓ Raw text saved');
 
-    // Initialize LLM client
-    const llmClient = new LLMClient(request.apiKey);
+    // Initialize LLM client with provider
+    const provider = request.provider || 'openai';
+    const llmClient = new LLMClient(request.apiKey, provider);
 
     // Parse CV text with LLM
-    console.log('Parsing CV text with LLM...');
+    console.log(`\n[SERVICE-WORKER] Step 4/5: Parsing CV text with LLM (${provider})...`);
+    const parseStart = Date.now();
     const cvParser = new CVParser(llmClient);
     const cvData = await cvParser.parse(cvText);
+    const parseTime = Date.now() - parseStart;
+    console.log(`[SERVICE-WORKER] ✓ LLM parsing completed in ${parseTime}ms`);
 
-    console.log('CV parsed successfully');
+    console.log('[SERVICE-WORKER] Parsed data structure:', {
+      hasPersonalInfo: !!cvData.personalInfo,
+      workExperienceCount: cvData.workExperience?.length || 0,
+      educationCount: cvData.education?.length || 0,
+      hasSkills: !!cvData.skills
+    });
 
     // Save parsed data
+    console.log('\n[SERVICE-WORKER] Step 5/5: Saving parsed CV data to storage...');
     await StorageManager.saveCVData(cvData);
+    console.log('[SERVICE-WORKER] ✓ Parsed data saved');
+
+    const totalTime = Date.now() - startTime;
+    console.log('\n========================================');
+    console.log(`[SERVICE-WORKER] ✓✓✓ SUCCESS - Total time: ${totalTime}ms (${(totalTime/1000).toFixed(1)}s)`);
+    console.log(`[SERVICE-WORKER] Breakdown: Extract=${extractTime}ms, Parse=${parseTime}ms, Other=${totalTime-extractTime-parseTime}ms`);
+    console.log('========================================\n');
 
     // Send success response
     sendResponse({
@@ -82,7 +132,12 @@ async function handleParseCVFromPDF(request, sendResponse) {
     });
 
   } catch (error) {
-    console.error('Error parsing CV:', error);
+    const totalTime = Date.now() - startTime;
+    console.error('\n========================================');
+    console.error(`[SERVICE-WORKER] ✗✗✗ ERROR after ${totalTime}ms`);
+    console.error('[SERVICE-WORKER] Error details:', error);
+    console.error('[SERVICE-WORKER] Error stack:', error.stack);
+    console.error('========================================\n');
     sendResponse({
       success: false,
       error: error.message
@@ -97,7 +152,8 @@ async function handleParseCVFromPDF(request, sendResponse) {
  */
 async function handleTestAPIKey(request, sendResponse) {
   try {
-    const llmClient = new LLMClient(request.apiKey);
+    const provider = request.provider || 'openai';
+    const llmClient = new LLMClient(request.apiKey, provider);
     const isValid = await llmClient.testConnection();
 
     sendResponse({

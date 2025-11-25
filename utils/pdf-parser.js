@@ -1,7 +1,11 @@
 /**
  * PDF Parser - Extracts text from PDF files
  * Uses pdf.js library (Mozilla's PDF renderer)
+ * Service Worker Compatible Version - Uses lazy loading
  */
+
+// Import PDF.js lazy loader
+import { getPDFJS } from '../lib/pdf-loader.js';
 
 /**
  * Extract text from PDF file
@@ -10,21 +14,45 @@
  */
 export async function extractTextFromPDF(pdfData) {
   try {
-    // Load PDF.js library from CDN
-    if (!window.pdfjsLib) {
-      await loadPDFJS();
-    }
+    console.log('[PDF-PARSER] Starting PDF text extraction...');
+    console.log('[PDF-PARSER] PDF data size:', pdfData.byteLength, 'bytes');
+
+    // Load PDF.js library (lazy loaded)
+    console.log('[PDF-PARSER] Loading PDF.js library...');
+    const pdfjsLib = await getPDFJS();
+    console.log('[PDF-PARSER] ✓ PDF.js library ready');
 
     // Load PDF document
-    const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+    console.log('[PDF-PARSER] Creating PDF loading task...');
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfData,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    });
+
+    console.log('[PDF-PARSER] Waiting for PDF to load...');
+    const startLoad = Date.now();
     const pdf = await loadingTask.promise;
+    const loadTime = Date.now() - startLoad;
+
+    console.log(`[PDF-PARSER] ✓ PDF loaded successfully in ${loadTime}ms`);
+    console.log(`[PDF-PARSER] Number of pages: ${pdf.numPages}`);
 
     let fullText = '';
 
     // Extract text from each page
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      console.log(`[PDF-PARSER] Processing page ${pageNum}/${pdf.numPages}...`);
+      const pageStart = Date.now();
+
       const page = await pdf.getPage(pageNum);
+      console.log(`[PDF-PARSER]   - Page ${pageNum} loaded in ${Date.now() - pageStart}ms`);
+
+      const textStart = Date.now();
       const textContent = await page.getTextContent();
+      console.log(`[PDF-PARSER]   - Text content extracted in ${Date.now() - textStart}ms`);
+      console.log(`[PDF-PARSER]   - Found ${textContent.items.length} text items`);
 
       // Combine text items
       const pageText = textContent.items
@@ -32,33 +60,16 @@ export async function extractTextFromPDF(pdfData) {
         .join(' ');
 
       fullText += pageText + '\n\n';
+      console.log(`[PDF-PARSER]   - Page ${pageNum} text length: ${pageText.length} characters`);
     }
 
+    console.log(`[PDF-PARSER] ✓ COMPLETE: Extracted ${fullText.length} total characters from PDF`);
     return fullText.trim();
 
   } catch (error) {
     console.error('Error extracting text from PDF:', error);
     throw new Error(`PDF extraction failed: ${error.message}`);
   }
-}
-
-/**
- * Load PDF.js library dynamically
- */
-async function loadPDFJS() {
-  return new Promise((resolve, reject) => {
-    // Use Mozilla's CDN for PDF.js
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    script.onload = () => {
-      // Set worker source
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      resolve();
-    };
-    script.onerror = () => reject(new Error('Failed to load PDF.js library'));
-    document.head.appendChild(script);
-  });
 }
 
 /**
@@ -77,9 +88,8 @@ export function isValidPDF(file) {
  */
 export async function getPDFMetadata(pdfData) {
   try {
-    if (!window.pdfjsLib) {
-      await loadPDFJS();
-    }
+    // Load PDF.js library (lazy loaded)
+    const pdfjsLib = await getPDFJS();
 
     const loadingTask = pdfjsLib.getDocument({ data: pdfData });
     const pdf = await loadingTask.promise;

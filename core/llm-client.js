@@ -9,44 +9,78 @@ import { retryWithBackoff, safeJSONParse } from '../utils/helpers.js';
 export class LLMClient {
   /**
    * Initialize LLM client
-   * @param {string} apiKey - OpenAI API key
-   * @param {string} model - Model name (default: gpt-4-turbo-preview)
+   * @param {string} apiKey - API key (OpenAI, Anthropic, or Groq)
+   * @param {string} provider - Provider name ('openai', 'anthropic', or 'groq')
+   * @param {string} model - Model name (optional, uses default for provider)
    */
-  constructor(apiKey, model = CONFIG.OPENAI_MODEL) {
+  constructor(apiKey, provider = 'openai', model = null) {
     this.apiKey = apiKey;
-    this.model = model;
-    this.apiUrl = CONFIG.OPENAI_API_URL;
+    this.provider = provider;
+
+    if (provider === 'anthropic') {
+      this.model = model || CONFIG.ANTHROPIC_MODEL;
+      this.apiUrl = CONFIG.ANTHROPIC_API_URL;
+      this.apiVersion = CONFIG.ANTHROPIC_VERSION;
+    } else if (provider === 'groq') {
+      this.model = model || CONFIG.GROQ_MODEL;
+      this.apiUrl = CONFIG.GROQ_API_URL;
+    } else {
+      this.model = model || CONFIG.OPENAI_MODEL;
+      this.apiUrl = CONFIG.OPENAI_API_URL;
+    }
   }
 
   /**
-   * Complete a prompt with OpenAI API
+   * Complete a prompt with LLM API (OpenAI, Anthropic, or Groq)
    * @param {string} prompt - The prompt to send
    * @param {Object} options - Additional options
    * @param {number} options.temperature - Temperature setting
    * @param {number} options.max_tokens - Max tokens in response
-   * @param {Object} options.response_format - Response format (e.g., { type: "json_object" })
+   * @param {Object} options.response_format - Response format (e.g., { type: "json_object" }) - OpenAI and Groq only
    * @returns {Promise<string>} - Response text
    */
   async complete(prompt, options = {}) {
-    const requestBody = {
-      model: this.model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful assistant that provides accurate and well-formatted responses.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: options.temperature ?? CONFIG.TEMPERATURE_GENERATION,
-      max_tokens: options.max_tokens ?? CONFIG.MAX_TOKENS
-    };
+    let requestBody;
 
-    // Add response format if specified (for JSON mode)
-    if (options.response_format) {
-      requestBody.response_format = options.response_format;
+    if (this.provider === 'anthropic') {
+      // Anthropic API request format
+      requestBody = {
+        model: this.model,
+        max_tokens: options.max_tokens ?? CONFIG.MAX_TOKENS,
+        temperature: options.temperature ?? CONFIG.TEMPERATURE_GENERATION,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      };
+
+      // Add system prompt as a separate parameter for Anthropic
+      requestBody.system = 'You are a helpful assistant that provides accurate and well-formatted responses.';
+
+    } else {
+      // OpenAI and Groq API request format (both use OpenAI-compatible format)
+      requestBody = {
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant that provides accurate and well-formatted responses.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: options.temperature ?? CONFIG.TEMPERATURE_GENERATION,
+        max_tokens: options.max_tokens ?? CONFIG.MAX_TOKENS
+      };
+
+      // Add response format if specified (for JSON mode - OpenAI and Groq)
+      if (options.response_format) {
+        requestBody.response_format = options.response_format;
+      }
     }
 
     try {
@@ -76,12 +110,22 @@ export class LLMClient {
     const timeoutId = setTimeout(() => controller.abort(), CONFIG.API_TIMEOUT_MS);
 
     try {
+      // Build headers based on provider
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+
+      if (this.provider === 'anthropic') {
+        headers['x-api-key'] = this.apiKey;
+        headers['anthropic-version'] = this.apiVersion;
+      } else {
+        // OpenAI and Groq both use Bearer token authentication
+        headers['Authorization'] = `Bearer ${this.apiKey}`;
+      }
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
+        headers,
         body: JSON.stringify(requestBody),
         signal: controller.signal
       });
@@ -91,14 +135,21 @@ export class LLMClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          errorData.error?.message || `API request failed with status ${response.status}`
+          errorData.error?.message || errorData.error?.type || `API request failed with status ${response.status}`
         );
       }
 
       const data = await response.json();
 
-      // Extract response text
-      const content = data.choices?.[0]?.message?.content;
+      // Extract response text based on provider
+      let content;
+      if (this.provider === 'anthropic') {
+        // Anthropic response format: { content: [{ type: "text", text: "..." }] }
+        content = data.content?.[0]?.text;
+      } else {
+        // OpenAI and Groq response format: { choices: [{ message: { content: "..." } }] }
+        content = data.choices?.[0]?.message?.content;
+      }
 
       if (!content) {
         throw new Error('No content in API response');
@@ -115,12 +166,12 @@ export class LLMClient {
       }
 
       // Handle rate limits
-      if (error.message.includes('rate_limit')) {
+      if (error.message.includes('rate_limit') || error.message.includes('429')) {
         throw new Error('Rate limit exceeded. Please wait and try again.');
       }
 
       // Handle authentication errors
-      if (error.message.includes('401') || error.message.includes('authentication')) {
+      if (error.message.includes('401') || error.message.includes('403') || error.message.includes('authentication')) {
         throw new Error('Invalid API key. Please check your configuration.');
       }
 
@@ -188,10 +239,16 @@ Return the JSON object now:
 `;
 
     try {
-      const response = await this.complete(prompt, {
-        temperature: CONFIG.TEMPERATURE_PARSING,
-        response_format: { type: 'json_object' }
-      });
+      const options = {
+        temperature: CONFIG.TEMPERATURE_PARSING
+      };
+
+      // Only add response_format for OpenAI and Groq (Anthropic doesn't support this parameter)
+      if (this.provider === 'openai' || this.provider === 'groq') {
+        options.response_format = { type: 'json_object' };
+      }
+
+      const response = await this.complete(prompt, options);
 
       // Parse JSON response
       const cvData = safeJSONParse(response);

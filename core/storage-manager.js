@@ -16,10 +16,10 @@ export class StorageManager {
       await chrome.storage.local.set({
         [CONFIG.STORAGE_KEY_API_KEY]: apiKey
       });
-      console.log('API key saved successfully');
+      console.log('OpenAI API key saved successfully');
     } catch (error) {
-      console.error('Error saving API key:', error);
-      throw new Error('Failed to save API key');
+      console.error('Error saving OpenAI API key:', error);
+      throw new Error('Failed to save OpenAI API key');
     }
   }
 
@@ -32,8 +32,101 @@ export class StorageManager {
       const result = await chrome.storage.local.get(CONFIG.STORAGE_KEY_API_KEY);
       return result[CONFIG.STORAGE_KEY_API_KEY] || null;
     } catch (error) {
-      console.error('Error getting API key:', error);
+      console.error('Error getting OpenAI API key:', error);
       return null;
+    }
+  }
+
+  /**
+   * Save Anthropic API key to storage
+   * @param {string} apiKey - Anthropic API key
+   * @returns {Promise<void>}
+   */
+  static async saveAnthropicAPIKey(apiKey) {
+    try {
+      await chrome.storage.local.set({
+        [CONFIG.STORAGE_KEY_ANTHROPIC_API_KEY]: apiKey
+      });
+      console.log('Anthropic API key saved successfully');
+    } catch (error) {
+      console.error('Error saving Anthropic API key:', error);
+      throw new Error('Failed to save Anthropic API key');
+    }
+  }
+
+  /**
+   * Get Anthropic API key from storage
+   * @returns {Promise<string|null>} - API key or null if not found
+   */
+  static async getAnthropicAPIKey() {
+    try {
+      const result = await chrome.storage.local.get(CONFIG.STORAGE_KEY_ANTHROPIC_API_KEY);
+      return result[CONFIG.STORAGE_KEY_ANTHROPIC_API_KEY] || null;
+    } catch (error) {
+      console.error('Error getting Anthropic API key:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save Groq API key to storage
+   * @param {string} apiKey - Groq API key
+   * @returns {Promise<void>}
+   */
+  static async saveGroqAPIKey(apiKey) {
+    try {
+      await chrome.storage.local.set({
+        [CONFIG.STORAGE_KEY_GROQ_API_KEY]: apiKey
+      });
+      console.log('Groq API key saved successfully');
+    } catch (error) {
+      console.error('Error saving Groq API key:', error);
+      throw new Error('Failed to save Groq API key');
+    }
+  }
+
+  /**
+   * Get Groq API key from storage
+   * @returns {Promise<string|null>} - API key or null if not found
+   */
+  static async getGroqAPIKey() {
+    try {
+      const result = await chrome.storage.local.get(CONFIG.STORAGE_KEY_GROQ_API_KEY);
+      return result[CONFIG.STORAGE_KEY_GROQ_API_KEY] || null;
+    } catch (error) {
+      console.error('Error getting Groq API key:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save LLM provider preference to storage
+   * @param {string} provider - Provider name ('openai', 'anthropic', or 'groq')
+   * @returns {Promise<void>}
+   */
+  static async saveLLMProvider(provider) {
+    try {
+      await chrome.storage.local.set({
+        [CONFIG.STORAGE_KEY_LLM_PROVIDER]: provider
+      });
+      console.log(`LLM provider set to: ${provider}`);
+    } catch (error) {
+      console.error('Error saving LLM provider:', error);
+      throw new Error('Failed to save LLM provider');
+    }
+  }
+
+  /**
+   * Get LLM provider preference from storage
+   * @returns {Promise<string>} - Provider name or 'openai' as default
+   */
+  static async getLLMProvider() {
+    try {
+      const result = await chrome.storage.local.get(CONFIG.STORAGE_KEY_LLM_PROVIDER);
+      return result[CONFIG.STORAGE_KEY_LLM_PROVIDER] || 'openai';
+    } catch (error) {
+      console.error('Error getting LLM provider:', error);
+      return 'openai';
     }
   }
 
@@ -198,18 +291,40 @@ export class StorageManager {
     try {
       const data = await chrome.storage.local.get([
         CONFIG.STORAGE_KEY_API_KEY,
+        CONFIG.STORAGE_KEY_ANTHROPIC_API_KEY,
+        CONFIG.STORAGE_KEY_GROQ_API_KEY,
+        CONFIG.STORAGE_KEY_LLM_PROVIDER,
         CONFIG.STORAGE_KEY_CV_DATA
       ]);
 
+      const provider = data[CONFIG.STORAGE_KEY_LLM_PROVIDER] || 'openai';
+      let hasAPIKey = false;
+
+      if (provider === 'anthropic') {
+        hasAPIKey = !!data[CONFIG.STORAGE_KEY_ANTHROPIC_API_KEY];
+      } else if (provider === 'groq') {
+        hasAPIKey = !!data[CONFIG.STORAGE_KEY_GROQ_API_KEY];
+      } else {
+        hasAPIKey = !!data[CONFIG.STORAGE_KEY_API_KEY];
+      }
+
       return {
-        hasAPIKey: !!data[CONFIG.STORAGE_KEY_API_KEY],
+        hasAPIKey,
+        hasOpenAIKey: !!data[CONFIG.STORAGE_KEY_API_KEY],
+        hasAnthropicKey: !!data[CONFIG.STORAGE_KEY_ANTHROPIC_API_KEY],
+        hasGroqKey: !!data[CONFIG.STORAGE_KEY_GROQ_API_KEY],
+        provider,
         hasCVData: !!data[CONFIG.STORAGE_KEY_CV_DATA],
-        isReady: !!data[CONFIG.STORAGE_KEY_API_KEY] && !!data[CONFIG.STORAGE_KEY_CV_DATA]
+        isReady: hasAPIKey && !!data[CONFIG.STORAGE_KEY_CV_DATA]
       };
     } catch (error) {
       console.error('Error checking readiness:', error);
       return {
         hasAPIKey: false,
+        hasOpenAIKey: false,
+        hasAnthropicKey: false,
+        hasGroqKey: false,
+        provider: 'openai',
         hasCVData: false,
         isReady: false
       };
