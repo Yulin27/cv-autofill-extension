@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Auto-Fill Backend Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.5em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        select,
+        input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 12px;
+            background: #f5f5f5;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-input-label:hover {
+            background: #efefef;
+            border-color: #667eea;
+        }
+
+        .file-name {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .secondary-btn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .result-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .result-area:empty::before {
+            content: "// API response will appear here...";
+            color: #6a9955;
+            font-style: italic;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
+        }
+
+        .health-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .health-indicator.online {
+            background: #28a745;
+            box-shadow: 0 0 10px #28a745;
+        }
+
+        .health-indicator.offline {
+            background: #dc3545;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CV Auto-Fill Backend Tester</h1>
+            <p>Test your Docker-deployed backend API</p>
+        </div>
+
+        <div class="main-content">
+            <!-- Upload Section -->
+            <div class="card">
+                <h2>1. Upload CV</h2>
+                <div id="uploadStatus" class="status"></div>
+
+                <div class="form-group">
+                    <label>Backend URL</label>
+                    <input type="text" id="backendUrl" value="http://localhost:8000" placeholder="http://localhost:8000">
+                </div>
+
+                <div class="form-group">
+                    <label>LLM Provider</label>
+                    <select id="llmProvider">
+                        <option value="openai">OpenAI</option>
+                        <option value="groq" selected>Groq</option>
+                        <option value="anthropic">Anthropic</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="password" id="apiKey" placeholder="Enter your LLM API key">
+                </div>
+
+                <div class="form-group">
+                    <label>CV File (PDF)</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="cvFile" accept=".pdf">
+                        <label for="cvFile" class="file-input-label">
+                            Click to select PDF file
+                        </label>
+                    </div>
+                    <div id="fileName" class="file-name"></div>
+                </div>
+
+                <button id="uploadBtn" onclick="uploadCV()">Upload & Parse CV</button>
+            </div>
+
+            <!-- Actions Section -->
+            <div class="card">
+                <h2>2. API Actions</h2>
+                <div id="actionStatus" class="status"></div>
+
+                <div class="form-group">
+                    <label>
+                        <span class="health-indicator" id="healthIndicator"></span>
+                        Backend Status
+                    </label>
+                    <button onclick="checkHealth()">Check Health</button>
+                </div>
+
+                <div class="button-group">
+                    <button onclick="getCVData()">Get CV Data</button>
+                    <button class="secondary-btn" onclick="deleteCVData()">Delete CV Data</button>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="card full-width">
+                <h2>API Response</h2>
+                <div id="result" class="result-area"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // File input handler
+        document.getElementById('cvFile').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            const fileNameDiv = document.getElementById('fileName');
+            if (fileName) {
+                fileNameDiv.textContent = `Selected: ${fileName}`;
+            } else {
+                fileNameDiv.textContent = '';
+            }
+        });
+
+        // Helper functions
+        function getBackendUrl() {
+            return document.getElementById('backendUrl').value.trim();
+        }
+
+        function showStatus(elementId, type, message) {
+            const statusEl = document.getElementById(elementId);
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = message;
+        }
+
+        function displayResult(data) {
+            const resultEl = document.getElementById('result');
+            resultEl.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Convert file to base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Health check
+        async function checkHealth() {
+            showStatus('actionStatus', 'loading', 'Checking backend health...');
+            const healthIndicator = document.getElementById('healthIndicator');
+
+            try {
+                const response = await fetch(`${getBackendUrl()}/health`);
+                const data = await response.json();
+
+                displayResult(data);
+                showStatus('actionStatus', 'success', `Backend is ${data.status}! Redis: ${data.redis}`);
+                healthIndicator.className = 'health-indicator online';
+            } catch (error) {
+                displayResult({ error: error.message });
+                showStatus('actionStatus', 'error', `Backend is offline: ${error.message}`);
+                healthIndicator.className = 'health-indicator offline';
+            }
+        }
+
+        // Upload CV
+        async function uploadCV() {
+            const fileInput = document.getElementById('cvFile');
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const provider = document.getElementById('llmProvider').value;
+            const uploadBtn = document.getElementById('uploadBtn');
+
+            // Validation
+            if (!fileInput.files[0]) {
+                showStatus('uploadStatus', 'error', 'Please select a PDF file');
+                return;
+            }
+
+            if (!apiKey) {
+                showStatus('uploadStatus', 'error', 'Please enter your API key');
+                return;
+            }
+
+            try {
+                uploadBtn.disabled = true;
+                showStatus('uploadStatus', 'loading', 'Converting PDF to base64...');
+
+                // Convert file to base64
+                const base64Data = await fileToBase64(fileInput.files[0]);
+
+                showStatus('uploadStatus', 'loading', 'Uploading to backend...');
+
+                // Prepare request
+                const requestData = {
+                    filename: fileInput.files[0].name,
+                    file_data: base64Data,
+                    llm_provider: provider,
+                    api_key: apiKey
+                };
+
+                // Send request
+                const response = await fetch(`${getBackendUrl()}/api/v1/cv/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayResult(data);
+                    showStatus('uploadStatus', 'success',
+                        `CV parsed successfully in ${data.processing_time_ms}ms`);
+                } else {
+                    displayResult(data);
+                    showStatus('uploadStatus', 'error', `Error: ${data.detail || 'Upload failed'}`);
+                }
+            } catch (error) {
+                displayResult({ error: error.message });
+                showStatus('uploadStatus', 'error', `Upload failed: ${error.message}`);
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        }
+
+        // Get CV data
+        async function getCVData() {
+            showStatus('actionStatus', 'loading', 'Fetching CV data...');
+
+            try {
+                const response = await fetch(`${getBackendUrl()}/api/v1/cv/data`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayResult(data);
+                    showStatus('actionStatus', 'success', 'CV data retrieved successfully');
+                } else {
+                    displayResult(data);
+                    showStatus('actionStatus', 'error', `Error: ${data.detail || 'Failed to get CV data'}`);
+                }
+            } catch (error) {
+                displayResult({ error: error.message });
+                showStatus('actionStatus', 'error', `Request failed: ${error.message}`);
+            }
+        }
+
+        // Delete CV data
+        async function deleteCVData() {
+            if (!confirm('Are you sure you want to delete the CV data?')) {
+                return;
+            }
+
+            showStatus('actionStatus', 'loading', 'Deleting CV data...');
+
+            try {
+                const response = await fetch(`${getBackendUrl()}/api/v1/cv/data`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayResult(data);
+                    showStatus('actionStatus', 'success', 'CV data deleted successfully');
+                } else {
+                    displayResult(data);
+                    showStatus('actionStatus', 'error', `Error: ${data.detail || 'Failed to delete CV data'}`);
+                }
+            } catch (error) {
+                displayResult({ error: error.message });
+                showStatus('actionStatus', 'error', `Request failed: ${error.message}`);
+            }
+        }
+
+        // Auto-check health on load
+        window.addEventListener('load', checkHealth);
+    </script>
+</body>
+</html>
