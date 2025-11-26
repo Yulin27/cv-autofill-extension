@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { ProviderConfig } from './components/ProviderConfig';
 import { CVUpload } from './components/CVUpload';
+import { CVDataEditor } from './components/CVDataEditor';
 import { Toast } from './components/Toast';
 import { STORAGE_KEYS } from './constants';
 import { AppConfig, CVData, ToastMessage, ParseResponse } from './types';
@@ -111,10 +112,20 @@ const App: React.FC = () => {
       // Restore API keys after clearing (since clearStorageLocal clears everything in dev mock)
       // In prod, you might want to only remove CV_DATA key.
       // Refined: Let's specificially remove CV data key
-      // But chrome.storage.local.remove exists. 
+      // But chrome.storage.local.remove exists.
       // For simplicity in this mockup, we just reset state.
       setCvData(null);
       showToast('CV Data cleared', 'info');
+    }
+  };
+
+  const handleCVDataSave = async (updatedData: CVData) => {
+    try {
+      await setStorageLocal({ [STORAGE_KEYS.CV_DATA]: updatedData });
+      setCvData(updatedData);
+      showToast('CV data updated successfully', 'success');
+    } catch (err) {
+      showToast('Failed to save CV data', 'error');
     }
   };
 
@@ -166,34 +177,35 @@ const App: React.FC = () => {
         <section>
           <div className="flex items-center justify-between mb-3">
              <div className="flex space-x-4">
-                <button 
+                <button
                   onClick={() => setActiveTab('upload')}
                   className={`text-sm font-bold uppercase tracking-wider flex items-center gap-1 transition-colors ${activeTab === 'upload' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
                 >
                   <FileCheck className="w-3 h-3" /> Source Data
                 </button>
                 {cvData && (
-                   <button 
+                   <button
                    onClick={() => setActiveTab('data')}
                    className={`text-sm font-bold uppercase tracking-wider flex items-center gap-1 transition-colors ${activeTab === 'data' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
                  >
-                   <Database className="w-3 h-3" /> View Data
+                   <Database className="w-3 h-3" /> Edit Data
                  </button>
                 )}
              </div>
           </div>
 
           {activeTab === 'upload' ? (
-             <CVUpload 
-             onUpload={handleUpload} 
-             isLoading={loading} 
-             hasExistingData={!!cvData} 
+             <CVUpload
+             onUpload={handleUpload}
+             isLoading={loading}
+             hasExistingData={!!cvData}
              onClearData={handleClearData}
            />
-          ) : (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 text-xs font-mono max-h-60 overflow-y-auto shadow-inner">
-               <pre>{JSON.stringify(cvData, null, 2)}</pre>
-            </div>
+          ) : cvData && (
+            <CVDataEditor
+              initialData={cvData}
+              onSave={handleCVDataSave}
+            />
           )}
         </section>
 
