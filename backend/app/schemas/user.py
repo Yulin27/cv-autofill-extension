@@ -3,7 +3,7 @@ User schemas for API requests and responses
 """
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 
 
 class UserBase(BaseModel):

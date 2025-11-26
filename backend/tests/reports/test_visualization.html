@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV Auto-Fill API Test Results</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            color: #718096;
+            font-size: 16px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .stat-card .icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            color: #718096;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card.passed .value { color: #48bb78; }
+        .stat-card.failed .value { color: #f56565; }
+        .stat-card.skipped .value { color: #ed8936; }
+        .stat-card.total .value { color: #4299e1; }
+
+        .test-groups {
+            display: grid;
+            gap: 20px;
+        }
+
+        .test-group {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .test-group h2 {
+            color: #2d3748;
+            font-size: 24px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .test-group h2 .badge {
+            font-size: 14px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: #edf2f7;
+            color: #4a5568;
+            font-weight: normal;
+        }
+
+        .test-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .test-item {
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            background: #f7fafc;
+            transition: all 0.2s;
+        }
+
+        .test-item:hover {
+            background: #edf2f7;
+            transform: translateX(5px);
+        }
+
+        .test-item.passed {
+            border-left-color: #48bb78;
+        }
+
+        .test-item.failed {
+            border-left-color: #f56565;
+            background: #fff5f5;
+        }
+
+        .test-item.skipped {
+            border-left-color: #ed8936;
+        }
+
+        .test-item .test-name {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .test-item .test-description {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .test-item .test-details {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #a0aec0;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-badge.passed {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .status-badge.failed {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .status-badge.skipped {
+            background: #feebc8;
+            color: #7c2d12;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .chart-container h3 {
+            color: #2d3748;
+            margin-bottom: 20px;
+        }
+
+        #testChart {
+            max-height: 300px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: white;
+            font-size: 20px;
+        }
+
+        .error-details {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #742a2a;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .refresh-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 50px;
+            padding: 15px 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+        }
+
+        .refresh-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+        }
+
+        .timestamp {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 CV Auto-Fill API Test Results</h1>
+            <div class="subtitle">Comprehensive test suite for all API endpoints</div>
+        </div>
+
+        <div id="loading" class="loading">
+            Loading test results...
+        </div>
+
+        <div id="content" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card total">
+                    <div class="icon">📊</div>
+                    <div class="value" id="totalTests">0</div>
+                    <div class="label">Total Tests</div>
+                </div>
+                <div class="stat-card passed">
+                    <div class="icon">✅</div>
+                    <div class="value" id="passedTests">0</div>
+                    <div class="label">Passed</div>
+                </div>
+                <div class="stat-card failed">
+                    <div class="icon">❌</div>
+                    <div class="value" id="failedTests">0</div>
+                    <div class="label">Failed</div>
+                </div>
+                <div class="stat-card skipped">
+                    <div class="icon">⊘</div>
+                    <div class="value" id="skippedTests">0</div>
+                    <div class="label">Skipped</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3>Test Results Overview</h3>
+                <canvas id="testChart"></canvas>
+            </div>
+
+            <div class="test-groups">
+                <div class="test-group">
+                    <h2>🏠 Main Endpoints <span class="badge" id="mainCount">0</span></h2>
+                    <div class="test-list" id="mainTests"></div>
+                </div>
+
+                <div class="test-group">
+                    <h2>📄 CV Management <span class="badge" id="cvCount">0</span></h2>
+                    <div class="test-list" id="cvTests"></div>
+                </div>
+
+                <div class="test-group">
+                    <h2>🤖 AI Agents <span class="badge" id="agentsCount">0</span></h2>
+                    <div class="test-list" id="agentsTests"></div>
+                </div>
+            </div>
+        </div>
+
+        <button class="refresh-button" onclick="loadTestResults()">🔄 Refresh</button>
+
+        <div class="timestamp" id="timestamp"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        let chart = null;
+
+        function loadTestResults() {
+            // Try to load from same directory
+            fetch('test_report.json')
+                .then(response => {
+                    if (!response.ok) throw new Error('File not found');
+                    return response.json();
+                })
+                .then(data => {
+                    displayResults(data);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('content').style.display = 'block';
+                })
+                .catch(error => {
+                    console.log('Fetch failed (expected for file:// protocol):', error);
+                    // Try loading via file input instead
+                    showFileSelector();
+                });
+        }
+
+        function showFileSelector() {
+            document.getElementById('loading').innerHTML = `
+                <div style="color: white;">
+                    <h2 style="margin-bottom: 20px;">📂 Load Test Results</h2>
+                    <p style="margin-bottom: 20px;">
+                        Select the test_report.json file to visualize results
+                    </p>
+                    <input type="file" id="fileInput" accept=".json"
+                           style="padding: 10px; font-size: 16px; background: white;
+                                  border-radius: 8px; cursor: pointer;">
+                    <p style="margin-top: 20px; font-size: 14px; opacity: 0.8;">
+                        File location: <code>backend/tests/reports/test_report.json</code>
+                    </p>
+                </div>
+            `;
+
+            document.getElementById('fileInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        try {
+                            const data = JSON.parse(event.target.result);
+                            displayResults(data);
+                            document.getElementById('loading').style.display = 'none';
+                            document.getElementById('content').style.display = 'block';
+                        } catch (error) {
+                            alert('Error parsing JSON file: ' + error.message);
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            });
+        }
+
+        function displayResults(data) {
+            const summary = data.summary || {};
+
+            // Update statistics
+            document.getElementById('totalTests').textContent = summary.total || 0;
+            document.getElementById('passedTests').textContent = summary.passed || 0;
+            document.getElementById('failedTests').textContent = summary.failed || 0;
+            document.getElementById('skippedTests').textContent = summary.skipped || 0;
+
+            // Update chart
+            updateChart(summary);
+
+            // Group tests by category
+            const tests = data.tests || [];
+            const mainTests = tests.filter(t => t.nodeid.includes('test_main'));
+            const cvTests = tests.filter(t => t.nodeid.includes('test_cv'));
+            const agentsTests = tests.filter(t => t.nodeid.includes('test_agents'));
+
+            // Update counts
+            document.getElementById('mainCount').textContent = mainTests.length;
+            document.getElementById('cvCount').textContent = cvTests.length;
+            document.getElementById('agentsCount').textContent = agentsTests.length;
+
+            // Display tests
+            displayTestGroup('mainTests', mainTests);
+            displayTestGroup('cvTests', cvTests);
+            displayTestGroup('agentsTests', agentsTests);
+
+            // Update timestamp
+            const now = new Date();
+            document.getElementById('timestamp').textContent =
+                `Last updated: ${now.toLocaleString()}`;
+        }
+
+        function displayTestGroup(containerId, tests) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            tests.forEach(test => {
+                const testItem = document.createElement('div');
+                testItem.className = `test-item ${test.outcome}`;
+
+                const testName = test.nodeid.split('::').pop().replace('test_', '').replace(/_/g, ' ');
+                const duration = (test.duration || 0).toFixed(3);
+
+                let errorDetails = '';
+                if (test.outcome === 'failed' && test.call && test.call.longrepr) {
+                    errorDetails = `
+                        <div class="error-details">
+                            ${escapeHtml(test.call.longrepr.slice(0, 500))}
+                        </div>
+                    `;
+                }
+
+                testItem.innerHTML = `
+                    <div class="test-name">
+                        <span class="status-badge ${test.outcome}">
+                            ${test.outcome === 'passed' ? '✓' : test.outcome === 'failed' ? '✗' : '⊘'}
+                            ${test.outcome.toUpperCase()}
+                        </span>
+                        ${testName}
+                    </div>
+                    <div class="test-description">${test.nodeid}</div>
+                    <div class="test-details">
+                        <span>⏱️ ${duration}s</span>
+                        <span>📍 ${test.lineno || 'N/A'}</span>
+                    </div>
+                    ${errorDetails}
+                `;
+
+                container.appendChild(testItem);
+            });
+
+            if (tests.length === 0) {
+                container.innerHTML = '<div style="color: #a0aec0; text-align: center; padding: 20px;">No tests in this category</div>';
+            }
+        }
+
+        function updateChart(summary) {
+            const ctx = document.getElementById('testChart');
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Passed', 'Failed', 'Skipped'],
+                    datasets: [{
+                        data: [
+                            summary.passed || 0,
+                            summary.failed || 0,
+                            summary.skipped || 0
+                        ],
+                        backgroundColor: [
+                            '#48bb78',
+                            '#f56565',
+                            '#ed8936'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load results on page load
+        loadTestResults();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadTestResults, 30000);
+    </script>
+</body>
+</html>

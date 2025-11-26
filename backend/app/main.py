@@ -1,24 +1,20 @@
 """
 Main FastAPI application
+Simplified version without authentication for personal use
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
-from app.core.database import engine, Base
 from app.core.redis_client import redis_client
-from app.api import auth, cv, agents
+from app.api import cv, agents
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
-    print("🚀 Starting CV Auto-Fill API...")
-
-    # Create database tables
-    print("📊 Creating database tables...")
-    Base.metadata.create_all(bind=engine)
+    print("🚀 Starting CV Auto-Fill API (No-Auth Mode)...")
 
     # Connect to Redis
     print("🔗 Connecting to Redis...")
@@ -30,6 +26,7 @@ async def lifespan(app: FastAPI):
         print("   Caching will be disabled")
 
     print("✓ Application started successfully")
+    print("ℹ️  Running in no-authentication mode for personal use")
 
     yield
 
@@ -43,21 +40,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Backend API for CV Auto-Fill Chrome Extension",
+    description="Backend API for CV Auto-Fill Chrome Extension (No Authentication - Personal Use)",
     lifespan=lifespan
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS if isinstance(settings.ALLOWED_ORIGINS, list) else ["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
+# Include routers (auth removed)
 app.include_router(cv.router, prefix=settings.API_V1_PREFIX)
 app.include_router(agents.router, prefix=settings.API_V1_PREFIX)
 

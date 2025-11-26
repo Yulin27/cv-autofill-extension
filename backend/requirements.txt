@@ -1,23 +1,18 @@
+# ============================================
+# CV Auto-Fill Backend - No Authentication
+# Simplified dependencies for personal use
+# ============================================
+
 # FastAPI and server
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 
-# Database
-sqlalchemy==2.0.25
-psycopg2-binary==2.9.9
-alembic==1.13.1
-
-# Redis
+# Redis (for CV data storage and caching)
 redis==5.0.1
 hiredis==2.3.2
 
-# Authentication
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.1.2
-
-# AI/LLM
+# AI/LLM providers
 openai==1.10.0
 anthropic==0.18.1
 httpx==0.26.0
@@ -25,15 +20,12 @@ httpx==0.26.0
 # PDF Processing
 pypdf2==3.0.1
 pdfplumber==0.10.3
+pdf2image==1.16.3
+PyMuPDF==1.23.8
+Pillow==10.2.0
 
 # Environment and config
 python-dotenv==1.0.1
 pydantic==2.5.3
 pydantic-settings==2.1.0
-
-# Utilities
-python-dateutil==2.8.2
 email-validator==2.1.0
-
-# CORS
-python-cors==1.0.0

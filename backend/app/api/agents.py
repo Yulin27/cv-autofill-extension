@@ -1,11 +1,8 @@
 """
-AI Agents API routes
+AI Agents API routes (No Authentication - Personal Use)
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from app.core.database import get_db
+from fastapi import APIRouter, HTTPException, status, Body
 from app.core.redis_client import redis_client
-from app.models import User
 from app.schemas import (
     FieldAnalysisRequest,
     FieldAnalysisResponse,
@@ -15,28 +12,26 @@ from app.schemas import (
 from app.services.llm_service import LLMService
 from app.services.field_analyzer_service import FieldAnalyzerService
 from app.services.content_generator_service import ContentGeneratorService
-from app.api.cv import get_current_user
 import hashlib
 import json
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
+# Single user mode - using constant cache key
+CACHE_KEY = "cv_data:single_user"
+
 
 @router.post("/analyze-field", response_model=FieldAnalysisResponse)
-async def analyze_field(
-    request: FieldAnalysisRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def analyze_field(request: FieldAnalysisRequest):
     """
-    Analyze a form field using Field Analyzer Agent
+    Analyze a form field using Field Analyzer Agent (No authentication required)
     """
     try:
         # Create cache key for this specific field analysis
         field_hash = hashlib.md5(
             f"{request.field_label}_{request.field_type}".encode()
         ).hexdigest()
-        cache_key = f"field_analysis:{current_user.id}:{field_hash}"
+        cache_key = f"field_analysis:{field_hash}"
 
         # Check cache
         cached_analysis = await redis_client.get(cache_key)
@@ -44,12 +39,10 @@ async def analyze_field(
             print(f"[AGENTS-API] Using cached analysis for field: {request.field_label}")
             return cached_analysis
 
-        # Note: User needs to provide API key via extension
-        # In a production setup, you might want to store encrypted API keys
-        # For now, we'll require the extension to pass the API key per request
+        # Note: For individual field analysis, use the batch endpoint instead
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This endpoint requires API key to be passed through the extension. Use the batch endpoint instead."
+            detail="Please use the /agents/analyze-and-generate endpoint for batch processing"
         )
 
     except HTTPException:
@@ -63,21 +56,14 @@ async def analyze_field(
 
 
 @router.post("/generate-content", response_model=ContentGenerationResponse)
-async def generate_content(
-    request: ContentGenerationRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def generate_content(request: ContentGenerationRequest):
     """
-    Generate content for a form field using Content Generator Agent
+    Generate content for a form field using Content Generator Agent (No authentication required)
     """
     try:
-        # Similar to field analysis, this would require API key
-        # In practice, the extension will handle the LLM calls client-side
-        # Or you can implement server-side API key management
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This endpoint requires API key management. The extension should make LLM calls directly."
+            detail="Please use the /agents/analyze-and-generate endpoint for batch processing"
         )
 
     except HTTPException:
@@ -92,14 +78,13 @@ async def generate_content(
 
 @router.post("/analyze-and-generate")
 async def analyze_and_generate_batch(
-    fields: list,
-    api_key: str,
-    provider: str = "openai",
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    fields: list = Body(...),
+    api_key: str = Body(...),
+    provider: str = Body("openai"),
+    page_context: dict = Body(None)
 ):
     """
-    Batch endpoint for analyzing fields and generating content
+    Batch endpoint for analyzing fields and generating content (No authentication required)
     This is more efficient for form filling operations
 
     Request body:
@@ -121,19 +106,14 @@ async def analyze_and_generate_batch(
     }
     """
     try:
-        # Get CV data from cache or database
-        cache_key = f"cv_data:{current_user.id}"
-        cv_data = await redis_client.get(cache_key)
+        # Get CV data from Redis
+        cv_data = await redis_client.get(CACHE_KEY)
 
         if not cv_data:
-            from app.models import CVData
-            cv_entry = db.query(CVData).filter(CVData.user_id == current_user.id).first()
-            if not cv_entry:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="No CV data found"
-                )
-            cv_data = cv_entry.structured_data
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No CV data found. Please upload a CV first."
+            )
 
         # Initialize services
         llm_service = LLMService(api_key, provider)
@@ -151,7 +131,7 @@ async def analyze_and_generate_batch(
                 cv_data=cv_data,
                 field_placeholder=field.get("placeholder"),
                 field_context=field.get("context"),
-                page_context=field.get("page_context")
+                page_context=page_context or field.get("page_context")
             )
 
             # Generate content
@@ -160,7 +140,7 @@ async def analyze_and_generate_batch(
                 field_type=field.get("type", "text"),
                 analysis=analysis,
                 cv_data=cv_data,
-                page_context=field.get("page_context"),
+                page_context=page_context or field.get("page_context"),
                 max_length=field.get("maxLength")
             )
 

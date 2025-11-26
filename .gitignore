@@ -1,3 +1,6 @@
+*.pyc
+*.pdf
+
 # Node modules (if any dependencies added later)
 node_modules/
 

@@ -1,49 +1,123 @@
 """
-PDF Service for extracting text from PDF files
+PDF Service for converting PDF pages to images for multi-modal LLM processing
 """
 import base64
-from typing import Optional
+from typing import List, Literal
 from io import BytesIO
-import pdfplumber
+from pdf2image import convert_from_bytes
+from PyPDF2 import PdfReader
+import fitz  # PyMuPDF
+from PIL import Image
 
 
 class PDFService:
-    """Service for PDF text extraction"""
+    """Service for PDF to image conversion"""
 
     @staticmethod
-    async def extract_text_from_pdf(pdf_data: bytes) -> str:
+    async def convert_pdf_to_images(
+        pdf_data: bytes,
+        dpi: int = 200,
+        method: Literal["pdf2image", "pymupdf"] = "pymupdf"
+    ) -> List[str]:
         """
-        Extract text from PDF bytes
+        Convert PDF pages to base64-encoded images
         Args:
             pdf_data: PDF file as bytes
+            dpi: Resolution for image conversion (default 200)
+            method: Conversion method - "pdf2image" or "pymupdf" (default "pymupdf")
         Returns:
-            Extracted text content
+            List of base64-encoded image strings (one per page)
+        """
+        if method == "pymupdf":
+            return await PDFService._convert_with_pymupdf(pdf_data, dpi)
+        elif method == "pdf2image":
+            return await PDFService._convert_with_pdf2image(pdf_data, dpi)
+        else:
+            raise ValueError(f"Invalid conversion method: {method}. Use 'pdf2image' or 'pymupdf'")
+
+    @staticmethod
+    async def _convert_with_pdf2image(pdf_data: bytes, dpi: int = 200) -> List[str]:
+        """
+        Convert PDF to images using pdf2image (requires poppler-utils)
+        Args:
+            pdf_data: PDF file as bytes
+            dpi: Resolution for image conversion
+        Returns:
+            List of base64-encoded image strings
         """
         try:
-            full_text = []
+            print("[PDF-SERVICE] Using pdf2image method...")
+            # Convert PDF pages to PIL Image objects
+            images = convert_from_bytes(pdf_data, dpi=dpi)
+            num_pages = len(images)
+            print(f"[PDF-SERVICE] Converting {num_pages} pages to images at {dpi} DPI...")
 
-            with pdfplumber.open(BytesIO(pdf_data)) as pdf:
-                num_pages = len(pdf.pages)
-                print(f"[PDF-SERVICE] Processing {num_pages} pages...")
+            base64_images = []
+            for page_num, image in enumerate(images, start=1):
+                print(f"[PDF-SERVICE] Processing page {page_num}/{num_pages}")
 
-                for page_num, page in enumerate(pdf.pages, start=1):
-                    print(f"[PDF-SERVICE] Extracting text from page {page_num}/{num_pages}")
+                # Convert PIL Image to base64
+                buffered = BytesIO()
+                image.save(buffered, format="PNG")
+                img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                base64_images.append(img_base64)
 
-                    # Extract text from page
-                    text = page.extract_text()
+                print(f"[PDF-SERVICE] Page {page_num}: {len(img_base64)} bytes (base64)")
 
-                    if text:
-                        full_text.append(text)
-                        print(f"[PDF-SERVICE] Page {page_num}: {len(text)} characters")
-
-            combined_text = "\n\n".join(full_text)
-            print(f"[PDF-SERVICE] Total extracted: {len(combined_text)} characters")
-
-            return combined_text.strip()
+            print(f"[PDF-SERVICE] Successfully converted {num_pages} pages to images")
+            return base64_images
 
         except Exception as e:
-            print(f"[PDF-SERVICE] Error extracting text: {e}")
-            raise Exception(f"PDF extraction failed: {str(e)}")
+            print(f"[PDF-SERVICE] Error converting PDF to images with pdf2image: {e}")
+            raise Exception(f"PDF to image conversion failed (pdf2image): {str(e)}")
+
+    @staticmethod
+    async def _convert_with_pymupdf(pdf_data: bytes, dpi: int = 200) -> List[str]:
+        """
+        Convert PDF to images using PyMuPDF (faster, no external dependencies)
+        Args:
+            pdf_data: PDF file as bytes
+            dpi: Resolution for image conversion
+        Returns:
+            List of base64-encoded image strings
+        """
+        try:
+            print("[PDF-SERVICE] Using PyMuPDF method...")
+            # Open PDF from bytes
+            pdf_document = fitz.open(stream=pdf_data, filetype="pdf")
+            num_pages = pdf_document.page_count
+            print(f"[PDF-SERVICE] Converting {num_pages} pages to images at {dpi} DPI...")
+
+            # Calculate zoom factor for desired DPI (72 DPI is default)
+            zoom = dpi / 72.0
+            matrix = fitz.Matrix(zoom, zoom)
+
+            base64_images = []
+            for page_num in range(num_pages):
+                print(f"[PDF-SERVICE] Processing page {page_num + 1}/{num_pages}")
+
+                # Get page and render to pixmap
+                page = pdf_document[page_num]
+                pixmap = page.get_pixmap(matrix=matrix)
+
+                # Convert pixmap to PIL Image
+                img = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
+
+                # Convert PIL Image to base64
+                buffered = BytesIO()
+                img.save(buffered, format="PNG")
+                img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                base64_images.append(img_base64)
+
+                print(f"[PDF-SERVICE] Page {page_num + 1}: {len(img_base64)} bytes (base64)")
+
+            pdf_document.close()
+            print(f"[PDF-SERVICE] Successfully converted {num_pages} pages to images")
+            return base64_images
+
+        except Exception as e:
+            print(f"[PDF-SERVICE] Error converting PDF to images with PyMuPDF: {e}")
+            raise Exception(f"PDF to image conversion failed (PyMuPDF): {str(e)}")
 
     @staticmethod
     def decode_base64_pdf(base64_data: str) -> bytes:
@@ -85,10 +159,10 @@ class PDFService:
             Metadata dictionary
         """
         try:
-            with pdfplumber.open(BytesIO(pdf_data)) as pdf:
-                return {
-                    "num_pages": len(pdf.pages),
-                    "metadata": pdf.metadata or {}
-                }
+            pdf_reader = PdfReader(BytesIO(pdf_data))
+            return {
+                "num_pages": len(pdf_reader.pages),
+                "metadata": pdf_reader.metadata or {}
+            }
         except Exception as e:
             raise Exception(f"Failed to get PDF metadata: {str(e)}")

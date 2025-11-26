@@ -55,17 +55,17 @@ class RedisClient:
             print(f"Redis set error: {e}")
             return False
 
-    async def delete(self, key: str) -> bool:
-        """Delete key from cache"""
+    async def delete(self, key: str) -> int:
+        """Delete key from cache. Returns number of keys deleted (0 if key didn't exist)"""
         if not self.redis:
-            return False
+            return 0
 
         try:
-            await self.redis.delete(key)
-            return True
+            result = await self.redis.delete(key)
+            return result  # Returns 0 if key didn't exist, 1 if it was deleted
         except Exception as e:
             print(f"Redis delete error: {e}")
-            return False
+            return 0
 
     async def exists(self, key: str) -> bool:
         """Check if key exists"""

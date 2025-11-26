@@ -1,5 +1,5 @@
 /**
- * API Client for Backend Communication
+ * API Client for Backend Communication (No Authentication - Personal Use)
  * Handles all API requests to the FastAPI backend
  */
 
@@ -11,20 +11,10 @@ const API_TIMEOUT = 30000; // 30 seconds
 
 export class APIClient {
   /**
-   * Initialize API client
-   * @param {string} authToken - JWT authentication token (optional)
+   * Initialize API client (no authentication required)
    */
-  constructor(authToken = null) {
-    this.authToken = authToken;
+  constructor() {
     this.baseUrl = API_BASE_URL;
-  }
-
-  /**
-   * Set authentication token
-   * @param {string} token - JWT token
-   */
-  setAuthToken(token) {
-    this.authToken = token;
   }
 
   /**
@@ -42,11 +32,6 @@ export class APIClient {
       'Content-Type': 'application/json',
       ...options.headers
     };
-
-    // Add auth token if available
-    if (this.authToken) {
-      headers['Authorization'] = `Bearer ${this.authToken}`;
-    }
 
     // Setup timeout
     const controller = new AbortController();
@@ -79,48 +64,6 @@ export class APIClient {
 
       throw error;
     }
-  }
-
-  // ==================== Authentication APIs ====================
-
-  /**
-   * Register a new user
-   * @param {Object} userData - User registration data
-   * @returns {Promise<Object>} - User data
-   */
-  async register(userData) {
-    return await this._request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({
-        email: userData.email,
-        password: userData.password,
-        full_name: userData.fullName,
-        preferred_llm_provider: userData.llmProvider || 'openai'
-      })
-    });
-  }
-
-  /**
-   * Login and get JWT token
-   * @param {string} email - User email
-   * @param {string} password - User password
-   * @returns {Promise<Object>} - Token data
-   */
-  async login(email, password) {
-    return await this._request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password })
-    });
-  }
-
-  /**
-   * Get current user information
-   * @returns {Promise<Object>} - User data
-   */
-  async getCurrentUser() {
-    return await this._request('/auth/me', {
-      method: 'GET'
-    });
   }
 
   // ==================== CV Management APIs ====================
@@ -256,8 +199,7 @@ export class APIClient {
   }
 }
 
-// Helper function to get API client instance with stored token
-export async function getAuthenticatedClient() {
-  const token = await chrome.storage.local.get('authToken');
-  return new APIClient(token.authToken || null);
+// Helper function to get API client instance (no authentication needed)
+export function getAPIClient() {
+  return new APIClient();
 }

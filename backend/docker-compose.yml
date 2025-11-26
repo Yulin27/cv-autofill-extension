@@ -1,25 +1,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: cv-autofill-postgres
-    environment:
-      POSTGRES_USER: cv_autofill_user
-      POSTGRES_PASSWORD: cv_autofill_pass
-      POSTGRES_DB: cv_autofill
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cv_autofill_user"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Redis Cache
+  # Redis Cache (for CV data storage and caching)
   redis:
     image: redis:7-alpine
     container_name: cv-autofill-redis
@@ -27,14 +9,15 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
-  # FastAPI Backend
+  # FastAPI Backend (No Authentication - Personal Use)
   api:
     build:
       context: .
@@ -43,21 +26,16 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://cv_autofill_user:cv_autofill_pass@postgres:5432/cv_autofill
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=your-secret-key-change-this
       - ENVIRONMENT=development
       - DEBUG=True
-      - ALLOWED_ORIGINS=*
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
       - ./app:/app/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
   redis_data:

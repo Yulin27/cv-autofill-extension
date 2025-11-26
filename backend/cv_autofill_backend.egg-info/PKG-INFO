@@ -1,0 +1,306 @@
+Metadata-Version: 2.4
+Name: cv-autofill-backend
+Version: 1.0.0
+Summary: CV Auto-Fill Backend API
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi==0.109.0
+Requires-Dist: uvicorn[standard]==0.27.0
+Requires-Dist: python-multipart==0.0.6
+Requires-Dist: redis==5.0.1
+Requires-Dist: hiredis==2.3.2
+Requires-Dist: openai==1.10.0
+Requires-Dist: anthropic==0.18.1
+Requires-Dist: httpx==0.26.0
+Requires-Dist: pypdf2==3.0.1
+Requires-Dist: pdfplumber==0.10.3
+Requires-Dist: pdf2image==1.16.3
+Requires-Dist: Pillow==10.2.0
+Requires-Dist: python-dotenv==1.0.1
+Requires-Dist: pydantic==2.5.3
+Requires-Dist: pydantic-settings==2.1.0
+Requires-Dist: email-validator==2.1.0
+Requires-Dist: fitz==0.0.1.dev2
+Provides-Extra: test
+Requires-Dist: pytest==7.4.3; extra == "test"
+Requires-Dist: pytest-asyncio==0.21.1; extra == "test"
+Requires-Dist: httpx==0.26.0; extra == "test"
+
+# CV Auto-Fill Backend API
+
+FastAPI backend for the CV Auto-Fill Chrome Extension with PostgreSQL and Redis.
+
+## Tech Stack
+
+- **FastAPI**: Modern Python web framework
+- **PostgreSQL**: User data and CV storage
+- **Redis**: Caching layer
+- **SQLAlchemy**: ORM for database operations
+- **Pydantic**: Data validation
+- **JWT**: Authentication tokens
+
+## Project Structure
+
+```
+backend/
+├── app/
+│   ├── api/              # API route handlers
+│   │   ├── auth.py       # Authentication endpoints
+│   │   ├── cv.py         # CV management endpoints
+│   │   └── agents.py     # AI agent endpoints
+│   ├── core/             # Core functionality
+│   │   ├── config.py     # Configuration
+│   │   ├── database.py   # Database connection
+│   │   ├── redis_client.py  # Redis connection
+│   │   └── security.py   # JWT and password hashing
+│   ├── models/           # SQLAlchemy models
+│   │   ├── user.py       # User model
+│   │   └── cv_data.py    # CV data model
+│   ├── schemas/          # Pydantic schemas
+│   │   ├── user.py       # User schemas
+│   │   └── cv.py         # CV schemas
+│   ├── services/         # Business logic
+│   │   ├── llm_service.py    # LLM API calls
+│   │   ├── pdf_service.py    # PDF processing
+│   │   ├── field_analyzer_service.py    # Field analysis
+│   │   └── content_generator_service.py # Content generation
+│   └── main.py           # FastAPI application
+├── requirements.txt      # Python dependencies
+├── Dockerfile           # Docker configuration
+├── docker-compose.yml   # Local development setup
+├── railway.json         # Railway deployment config
+└── render.yaml          # Render deployment config
+```
+
+## Setup
+
+### Local Development with Docker
+
+1. **Clone and navigate to backend:**
+   ```bash
+   cd backend
+   ```
+
+2. **Copy environment variables:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Edit `.env` with your configuration:**
+   - Set `SECRET_KEY` to a random string
+   - Add LLM API keys if using server-side processing
+   - Configure database and Redis URLs (defaults work with docker-compose)
+
+4. **Start services:**
+   ```bash
+   docker-compose up -d
+   ```
+
+5. **API will be available at:**
+   - API: http://localhost:8000
+   - API Docs: http://localhost:8000/docs
+   - PostgreSQL: localhost:5432
+   - Redis: localhost:6379
+
+6. **View logs:**
+   ```bash
+   docker-compose logs -f api
+   ```
+
+### Local Development without Docker
+
+1. **Install PostgreSQL and Redis:**
+   ```bash
+   # macOS
+   brew install postgresql redis
+   brew services start postgresql
+   brew services start redis
+
+   # Ubuntu
+   sudo apt-get install postgresql redis-server
+   sudo systemctl start postgresql redis
+   ```
+
+2. **Create database:**
+   ```bash
+   createdb cv_autofill
+   ```
+
+3. **Install Python dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run the server:**
+   ```bash
+   cd backend
+   python -m app.main
+   # or
+   uvicorn app.main:app --reload
+   ```
+
+## API Endpoints
+
+### Authentication
+
+- `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/login` - Login and get JWT token
+- `GET /api/v1/auth/me` - Get current user info
+
+### CV Management
+
+- `POST /api/v1/cv/upload` - Upload and parse CV (PDF)
+- `GET /api/v1/cv/data` - Get user's CV data
+- `DELETE /api/v1/cv/data` - Delete CV data
+
+### AI Agents
+
+- `POST /api/v1/agents/analyze-field` - Analyze form field
+- `POST /api/v1/agents/generate-content` - Generate field content
+- `POST /api/v1/agents/analyze-and-generate` - Batch process fields
+
+### Health
+
+- `GET /` - API info
+- `GET /health` - Health check
+
+## Deployment
+
+### Railway
+
+1. **Install Railway CLI:**
+   ```bash
+   npm install -g @railway/cli
+   ```
+
+2. **Login and initialize:**
+   ```bash
+   railway login
+   railway init
+   ```
+
+3. **Add PostgreSQL and Redis:**
+   ```bash
+   railway add --plugin postgresql
+   railway add --plugin redis
+   ```
+
+4. **Set environment variables:**
+   ```bash
+   railway variables set SECRET_KEY=<random-string>
+   railway variables set ENVIRONMENT=production
+   railway variables set DEBUG=False
+   ```
+
+5. **Deploy:**
+   ```bash
+   railway up
+   ```
+
+### Render
+
+1. **Connect repository to Render**
+
+2. **Render will auto-detect `render.yaml` and create:**
+   - Web service (FastAPI)
+   - PostgreSQL database
+   - Redis instance
+
+3. **Set environment variables in Render dashboard:**
+   - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY` (if using server-side)
+   - Render auto-generates `SECRET_KEY` and database URLs
+
+4. **Deploy from dashboard or push to main branch**
+
+### Fly.io
+
+1. **Install Fly CLI:**
+   ```bash
+   curl -L https://fly.io/install.sh | sh
+   ```
+
+2. **Login and initialize:**
+   ```bash
+   fly auth login
+   fly launch
+   ```
+
+3. **Create PostgreSQL:**
+   ```bash
+   fly postgres create
+   fly postgres attach <postgres-app-name>
+   ```
+
+4. **Create Redis:**
+   ```bash
+   fly redis create
+   ```
+
+5. **Set secrets:**
+   ```bash
+   fly secrets set SECRET_KEY=<random-string>
+   fly secrets set REDIS_URL=<redis-url>
+   ```
+
+6. **Deploy:**
+   ```bash
+   fly deploy
+   ```
+
+## Environment Variables
+
+Required:
+- `DATABASE_URL` - PostgreSQL connection string
+- `REDIS_URL` - Redis connection string
+- `SECRET_KEY` - JWT secret key
+
+Optional:
+- `OPENAI_API_KEY` - For server-side OpenAI calls
+- `ANTHROPIC_API_KEY` - For server-side Anthropic calls
+- `GROQ_API_KEY` - For server-side Groq calls
+- `ALLOWED_ORIGINS` - CORS origins (comma-separated)
+- `ENVIRONMENT` - development/production
+- `DEBUG` - Enable debug mode
+
+## Database Migrations
+
+Using Alembic:
+
+```bash
+# Create migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback
+alembic downgrade -1
+```
+
+## Testing
+
+```bash
+# Install test dependencies
+pip install pytest pytest-asyncio httpx
+
+# Run tests
+pytest
+```
+
+## Security Notes
+
+1. **API Keys**: Users provide their own LLM API keys through the extension
+2. **JWT Tokens**: Stored securely in chrome.storage by extension
+3. **CORS**: Configure `ALLOWED_ORIGINS` for production
+4. **SSL**: Use HTTPS in production (automatic on Railway/Render/Fly.io)
+5. **Rate Limiting**: Add rate limiting for production (e.g., slowapi)
+
+## Monitoring
+
+- **Logs**: Use platform-specific logging (Railway/Render/Fly.io dashboards)
+- **Metrics**: Consider adding Sentry for error tracking
+- **Performance**: Monitor Redis hit rates and database query times
+
+## License
+
+MIT

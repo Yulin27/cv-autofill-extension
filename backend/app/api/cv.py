@@ -1,66 +1,26 @@
 """
-CV Management API routes
+CV Management API routes (No Authentication - Personal Use)
 """
 import time
-from fastapi import APIRouter, Depends, HTTPException, status, Header
-from sqlalchemy.orm import Session
-from typing import Optional
-from app.core.database import get_db
-from app.core.security import decode_access_token
+from fastapi import APIRouter, HTTPException, status
 from app.core.redis_client import redis_client
-from app.models import User, CVData
 from app.schemas import (
     CVUploadRequest,
-    CVParseResponse,
-    CVDataResponse,
-    CVStructuredData
+    CVParseResponse
 )
 from app.services.pdf_service import PDFService
 from app.services.llm_service import LLMService
 
 router = APIRouter(prefix="/cv", tags=["cv"])
 
-
-async def get_current_user(
-    authorization: str = Header(...),
-    db: Session = Depends(get_db)
-) -> User:
-    """Dependency to get current authenticated user"""
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header"
-        )
-
-    token = authorization.replace("Bearer ", "")
-    payload = decode_access_token(token)
-
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token"
-        )
-
-    user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == int(user_id)).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
-    return user
+# Single user mode - using constant cache key
+CACHE_KEY = "cv_data:single_user"
 
 
 @router.post("/upload", response_model=CVParseResponse)
-async def upload_cv(
-    request: CVUploadRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def upload_cv(request: CVUploadRequest):
     """
-    Upload and parse CV from PDF
+    Upload and parse CV from PDF (No authentication required)
     """
     start_time = time.time()
 
@@ -75,21 +35,21 @@ async def upload_cv(
                 detail="Invalid PDF file"
             )
 
-        # Extract text from PDF
-        print(f"[CV-API] Extracting text from PDF: {request.filename}")
-        cv_text = await PDFService.extract_text_from_pdf(pdf_bytes)
+        # Convert PDF to images
+        print(f"[CV-API] Converting PDF to images: {request.filename}")
+        page_images = await PDFService.convert_pdf_to_images(pdf_bytes)
 
-        if not cv_text or len(cv_text) < 50:
+        if not page_images:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Extracted text is too short or empty"
+                detail="Failed to convert PDF to images"
             )
 
-        print(f"[CV-API] Extracted {len(cv_text)} characters")
+        print(f"[CV-API] Converted {len(page_images)} page(s) to images")
 
-        # Determine LLM provider and API key
-        provider = request.llm_provider or current_user.preferred_llm_provider
-        api_key = request.api_key  # User can provide their own API key
+        # Get LLM provider and API key from request
+        provider = request.llm_provider or "groq"  # Default to Groq for multi-modal
+        api_key = request.api_key
 
         if not api_key:
             raise HTTPException(
@@ -100,37 +60,19 @@ async def upload_cv(
         # Initialize LLM service
         llm_service = LLMService(api_key, provider)
 
-        # Parse CV text
-        print(f"[CV-API] Parsing CV with {provider}")
-        cv_data = await llm_service.parse_cv_text(cv_text)
+        # Parse CV from images using multi-modal LLM
+        print(f"[CV-API] Parsing CV from images with {provider}")
+        cv_data = await llm_service.parse_cv_from_images(page_images)
 
-        # Save to database
-        cv_entry = CVData(
-            user_id=current_user.id,
-            raw_text=cv_text,
-            structured_data=cv_data,
-            filename=request.filename,
-            file_size_bytes=len(pdf_bytes),
-            processing_time_ms=int((time.time() - start_time) * 1000)
-        )
-
-        # Delete old CV data for this user (keep only latest)
-        db.query(CVData).filter(CVData.user_id == current_user.id).delete()
-
-        db.add(cv_entry)
-        db.commit()
-        db.refresh(cv_entry)
-
-        # Cache CV data in Redis for faster access
-        cache_key = f"cv_data:{current_user.id}"
-        await redis_client.set(cache_key, cv_data, ttl=3600)
+        # Store CV data in Redis (no database needed for single user)
+        await redis_client.set(CACHE_KEY, cv_data, ttl=86400)  # 24 hour TTL
 
         processing_time = int((time.time() - start_time) * 1000)
 
         return {
             "success": True,
             "cv_data": cv_data,
-            "cv_id": cv_entry.id,
+            "cv_id": 1,  # Dummy ID for compatibility
             "processing_time_ms": processing_time,
             "message": "CV uploaded and parsed successfully"
         }
@@ -145,57 +87,37 @@ async def upload_cv(
         )
 
 
-@router.get("/data", response_model=CVDataResponse)
-async def get_cv_data(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+@router.get("/data")
+async def get_cv_data():
     """
-    Get user's CV data
+    Get CV data (No authentication required)
     """
-    # Try cache first
-    cache_key = f"cv_data:{current_user.id}"
-    cached_data = await redis_client.get(cache_key)
+    # Get from Redis
+    cached_data = await redis_client.get(CACHE_KEY)
 
-    if cached_data:
-        print(f"[CV-API] Retrieved CV data from cache for user {current_user.id}")
-        # We still need to get the CV entry for metadata
-        cv_entry = db.query(CVData).filter(CVData.user_id == current_user.id).first()
-        if cv_entry:
-            return cv_entry
-
-    # Get from database
-    cv_entry = db.query(CVData).filter(CVData.user_id == current_user.id).first()
-
-    if not cv_entry:
+    if not cached_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No CV data found. Please upload a CV first."
         )
 
-    # Cache for future requests
-    await redis_client.set(cache_key, cv_entry.structured_data, ttl=3600)
-
-    return cv_entry
+    return {
+        "success": True,
+        "cv_data": cached_data,
+        "structured_data": cached_data
+    }
 
 
 @router.delete("/data")
-async def delete_cv_data(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def delete_cv_data():
     """
-    Delete user's CV data
+    Delete CV data (No authentication required)
     """
-    # Delete from database
-    deleted = db.query(CVData).filter(CVData.user_id == current_user.id).delete()
-    db.commit()
+    # Delete from Redis
+    deleted = await redis_client.delete(CACHE_KEY)
+    await redis_client.delete(f"{CACHE_KEY}:raw_text")
 
-    # Delete from cache
-    cache_key = f"cv_data:{current_user.id}"
-    await redis_client.delete(cache_key)
-
-    if deleted == 0:
+    if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No CV data found"

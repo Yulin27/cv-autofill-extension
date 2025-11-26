@@ -1,0 +1,20 @@
+# Testing dependencies for CV Auto-Fill Backend API
+# Install with: pip install -r requirements-test.txt
+
+# Core testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# HTTP client for testing
+httpx>=0.24.0
+
+# Test reporting
+pytest-html>=3.2.0
+pytest-json-report>=1.5.0
+pytest-metadata>=3.0.0
+
+# Code coverage (optional)
+pytest-cov>=4.1.0
+
+# Mocking utilities
+pytest-mock>=3.11.0

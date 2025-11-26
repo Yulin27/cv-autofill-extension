@@ -1,17 +1,22 @@
 """
 LLM Service for interacting with OpenAI, Anthropic, and Groq APIs
 """
-import json
+
 import asyncio
-from typing import Optional, Dict, Any, List
+import json
+from typing import Any, Dict, List, Optional
+
 import httpx
+
 from app.core.config import settings
 
 
 class LLMService:
     """Service for LLM API calls with support for multiple providers"""
 
-    def __init__(self, api_key: str, provider: str = "openai", model: Optional[str] = None):
+    def __init__(
+        self, api_key: str, provider: str = "openai", model: Optional[str] = None
+    ):
         """
         Initialize LLM service
         Args:
@@ -30,6 +35,8 @@ class LLMService:
         elif self.provider == "groq":
             self.model = model or "llama-3.3-70b-versatile"
             self.api_url = "https://api.groq.com/openai/v1/chat/completions"
+            # Multi-modal model for vision tasks
+            self.vision_model = "meta-llama/llama-4-maverick-17b-128e-instruct"
         else:  # openai
             self.model = model or "gpt-4-turbo-preview"
             self.api_url = "https://api.openai.com/v1/chat/completions"
@@ -43,7 +50,7 @@ class LLMService:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int = 2000,
-        response_format: Optional[Dict[str, str]] = None
+        response_format: Optional[Dict[str, str]] = None,
     ) -> str:
         """
         Complete a prompt using the LLM API
@@ -62,17 +69,20 @@ class LLMService:
                 "max_tokens": max_tokens,
                 "temperature": temperature,
                 "messages": [{"role": "user", "content": prompt}],
-                "system": "You are a helpful assistant that provides accurate and well-formatted responses."
+                "system": "You are a helpful assistant that provides accurate and well-formatted responses.",
             }
         else:  # openai and groq
             request_body = {
                 "model": self.model,
                 "messages": [
-                    {"role": "system", "content": "You are a helpful assistant that provides accurate and well-formatted responses."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that provides accurate and well-formatted responses.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 "temperature": temperature,
-                "max_tokens": max_tokens
+                "max_tokens": max_tokens,
             }
 
             # Add response format if specified (not supported by Anthropic)
@@ -87,7 +97,7 @@ class LLMService:
             except Exception as e:
                 if attempt == self.max_retries - 1:
                     raise
-                await asyncio.sleep(self.retry_delay * (2 ** attempt))
+                await asyncio.sleep(self.retry_delay * (2**attempt))
 
     async def _make_request(self, request_body: Dict[str, Any]) -> str:
         """
@@ -108,14 +118,14 @@ class LLMService:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
-                self.api_url,
-                headers=headers,
-                json=request_body
+                self.api_url, headers=headers, json=request_body
             )
 
             if not response.is_success:
                 error_data = response.json() if response.text else {}
-                error_msg = error_data.get("error", {}).get("message", f"API request failed with status {response.status_code}")
+                error_msg = error_data.get("error", {}).get(
+                    "message", f"API request failed with status {response.status_code}"
+                )
                 raise Exception(error_msg)
 
             data = response.json()
@@ -179,7 +189,7 @@ Return a JSON object with this exact structure:
     "languages": [],
     "soft": []
   }},
-  "certifications": []
+  "certifications": [],
 }}
 
 Instructions:
@@ -201,7 +211,7 @@ Return the JSON object now:
             prompt,
             temperature=0.2,  # Low temperature for consistent parsing
             max_tokens=2000,
-            response_format=response_format
+            response_format=response_format,
         )
 
         # Parse JSON response
@@ -256,19 +266,14 @@ Return the JSON object now:
         """
         try:
             await self.complete(
-                "Respond with 'OK' if you can read this.",
-                temperature=0,
-                max_tokens=10
+                "Respond with 'OK' if you can read this.", temperature=0, max_tokens=10
             )
             return True
         except Exception:
             return False
 
     async def batch_complete(
-        self,
-        prompts: List[str],
-        temperature: float = 0.7,
-        max_tokens: int = 2000
+        self, prompts: List[str], temperature: float = 0.7, max_tokens: int = 2000
     ) -> List[str]:
         """
         Batch complete multiple prompts in parallel
@@ -279,8 +284,180 @@ Return the JSON object now:
         Returns:
             List of responses
         """
-        tasks = [
-            self.complete(prompt, temperature, max_tokens)
-            for prompt in prompts
-        ]
+        tasks = [self.complete(prompt, temperature, max_tokens) for prompt in prompts]
         return await asyncio.gather(*tasks)
+
+    async def vision_complete(
+        self,
+        prompt: str,
+        images: List[str],
+        temperature: float = 0.7,
+        max_tokens: int = 4000,
+        response_format: Optional[Dict[str, str]] = None,
+    ) -> str:
+        """
+        Complete a prompt with image inputs using multi-modal LLM
+        Args:
+            prompt: The text prompt to send
+            images: List of base64-encoded images
+            temperature: Temperature setting (0.0-2.0)
+            max_tokens: Maximum tokens in response
+            response_format: Response format (e.g., {"type": "json_object"})
+        Returns:
+            Response text from the LLM
+        """
+        # Build content array with text and images
+        content = [{"type": "text", "text": prompt}]
+
+        # Add images to content
+        for img_base64 in images:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{img_base64}"
+                }
+            })
+
+        # Build request body based on provider
+        if self.provider == "groq":
+            # Use Groq's vision model
+            request_body = {
+                "model": self.vision_model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that can analyze images and extract structured information.",
+                    },
+                    {"role": "user", "content": content},
+                ],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+
+            # Add response format if specified
+            if response_format:
+                request_body["response_format"] = response_format
+
+        elif self.provider == "openai":
+            # OpenAI vision API
+            request_body = {
+                "model": "gpt-4-vision-preview",
+                "messages": [
+                    {"role": "user", "content": content}
+                ],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+
+            if response_format:
+                request_body["response_format"] = response_format
+        else:
+            raise Exception(f"Vision API not supported for provider: {self.provider}")
+
+        # Make request with retry logic
+        for attempt in range(self.max_retries):
+            try:
+                response = await self._make_request(request_body)
+                return response
+            except Exception as e:
+                if attempt == self.max_retries - 1:
+                    raise
+                await asyncio.sleep(self.retry_delay * (2**attempt))
+
+    async def parse_cv_from_images(self, images: List[str]) -> Dict[str, Any]:
+        """
+        Parse CV from PDF page images using multi-modal LLM
+        Args:
+            images: List of base64-encoded page images
+        Returns:
+            Structured CV data as dictionary
+        """
+        num_pages = len(images)
+        print(f"[LLM-SERVICE] Parsing CV from {num_pages} page image(s) using vision model")
+
+        prompt = f"""
+Analyze the CV/resume document shown in the image(s) and extract all information into a structured JSON format.
+
+{"This CV has multiple pages. Please analyze all pages to extract complete information." if num_pages > 1 else ""}
+
+Return a JSON object with this exact structure:
+{{
+  "personalInfo": {{
+    "fullName": "",
+    "email": "",
+    "phone": "",
+    "location": "",
+    "linkedin": "",
+    "website": ""
+  }},
+  "summary": "",
+  "workExperience": [
+    {{
+      "company": "",
+      "position": "",
+      "startDate": "",
+      "endDate": "",
+      "description": "",
+      "achievements": []
+    }}
+  ],
+  "education": [
+    {{
+      "institution": "",
+      "degree": "",
+      "field": "",
+      "graduationDate": ""
+    }}
+  ],
+  "skills": {{
+    "technical": [],
+    "languages": [],
+    "soft": []
+  }},
+  "certifications": []
+}}
+
+Instructions:
+1. Carefully read all text visible in the CV images
+2. Extract all information present in the CV
+3. Use empty strings for missing text fields
+4. Use empty arrays for missing list fields
+5. Ensure dates are in a consistent format (YYYY-MM or YYYY)
+6. For work experience and education, create separate entries for each position/degree
+7. Extract all skills and categorize them appropriately
+8. Return ONLY valid JSON, no markdown formatting or additional text
+
+Return the JSON object now:
+"""
+
+        # Set options for CV parsing
+        response_format = None
+        if self.provider in ["openai", "groq"]:
+            response_format = {"type": "json_object"}
+
+        response = await self.vision_complete(
+            prompt,
+            images,
+            temperature=0.2,  # Low temperature for consistent parsing
+            max_tokens=4000,  # Increased for complex CVs
+            response_format=response_format,
+        )
+
+        # Parse JSON response
+        try:
+            cv_data = json.loads(response)
+        except json.JSONDecodeError:
+            # Try to extract JSON from markdown code blocks
+            if "```json" in response:
+                json_str = response.split("```json")[1].split("```")[0].strip()
+                cv_data = json.loads(json_str)
+            elif "```" in response:
+                json_str = response.split("```")[1].split("```")[0].strip()
+                cv_data = json.loads(json_str)
+            else:
+                raise Exception("Failed to parse CV data as JSON")
+
+        # Validate structure
+        self._validate_cv_structure(cv_data)
+        print(f"[LLM-SERVICE] Successfully parsed CV with {len(cv_data.get('workExperience', []))} work experiences")
+        return cv_data
