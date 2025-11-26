@@ -13,6 +13,8 @@ class AutoFiller {
     this.fieldAnalyzer = null;
     this.contentGenerator = null;
     this.llmClient = null;
+    this.apiClient = null;
+    this.useBackend = false;
   }
 
   /**
@@ -31,6 +33,7 @@ class AutoFiller {
         { FieldAnalyzerAgent },
         { ContentGeneratorAgent },
         { LLMClient },
+        { APIClient },
         { StorageManager },
         { CONFIG }
       ] = await Promise.all([
@@ -38,9 +41,14 @@ class AutoFiller {
         import(chrome.runtime.getURL('core/field-analyzer-agent.js')),
         import(chrome.runtime.getURL('core/content-generator-agent.js')),
         import(chrome.runtime.getURL('core/llm-client.js')),
+        import(chrome.runtime.getURL('core/api-client.js')),
         import(chrome.runtime.getURL('core/storage-manager.js')),
         import(chrome.runtime.getURL('config/config.js'))
       ]);
+
+      // Check if we should use backend
+      this.useBackend = CONFIG.USE_BACKEND;
+      console.log('AutoFiller mode:', this.useBackend ? 'BACKEND API' : 'DIRECT LLM');
 
       // Get provider and API key from storage
       const provider = await StorageManager.getLLMProvider();
@@ -58,13 +66,23 @@ class AutoFiller {
         throw new Error(`API key not configured. Please set your ${providerName} API key in the extension popup.`);
       }
 
-      // Initialize LLM client with provider
-      this.llmClient = new LLMClient(apiKey, provider);
+      this.provider = provider;
+      this.apiKey = apiKey;
 
-      // Initialize agents
+      // Initialize form detector (always needed)
       this.formDetector = new FormDetector();
-      this.fieldAnalyzer = new FieldAnalyzerAgent(this.llmClient);
-      this.contentGenerator = new ContentGeneratorAgent(this.llmClient);
+
+      if (this.useBackend) {
+        // Initialize APIClient for backend mode
+        this.apiClient = new APIClient();
+        console.log('Using backend API at:', CONFIG.BACKEND_URL);
+      } else {
+        // Initialize LLM client and agents for direct mode
+        this.llmClient = new LLMClient(apiKey, provider);
+        this.fieldAnalyzer = new FieldAnalyzerAgent(this.llmClient);
+        this.contentGenerator = new ContentGeneratorAgent(this.llmClient);
+        console.log('Using direct LLM API with provider:', provider);
+      }
 
       this.isInitialized = true;
       console.log('AutoFiller initialized successfully');
@@ -109,15 +127,41 @@ class AutoFiller {
       const jobContext = this.formDetector.getPageContext();
       console.log('Page context:', jobContext);
 
-      // Step 4: Analyze fields with Agent 1
-      console.log('Analyzing fields...');
-      const analyses = await this.fieldAnalyzer.analyzeBatch(fields, cvData, jobContext);
-      console.log('Field analysis complete');
+      let fillData;
 
-      // Step 5: Generate content with Agent 2
-      console.log('Generating content...');
-      const fillData = await this._generateContentForFields(fields, analyses, cvData, jobContext);
-      console.log('Content generation complete');
+      if (this.useBackend) {
+        // ===== BACKEND MODE: Use batch API =====
+        console.log('Using backend API for field analysis and content generation...');
+
+        const batchStart = Date.now();
+        const batchResult = await this.apiClient.analyzeAndGenerateBatch(
+          fields,
+          this.apiKey,
+          this.provider,
+          jobContext
+        );
+        console.log(`Backend processing completed in ${Date.now() - batchStart}ms`);
+
+        // Transform backend result into fillData format
+        fillData = batchResult.results.map((result, i) => ({
+          field: fields[i],
+          analysis: result.analysis,
+          content: result.content,
+          shouldFill: result.content !== null && result.content !== ''
+        }));
+
+      } else {
+        // ===== DIRECT MODE: Use local agents =====
+        // Step 4: Analyze fields with Agent 1
+        console.log('Analyzing fields...');
+        const analyses = await this.fieldAnalyzer.analyzeBatch(fields, cvData, jobContext);
+        console.log('Field analysis complete');
+
+        // Step 5: Generate content with Agent 2
+        console.log('Generating content...');
+        fillData = await this._generateContentForFields(fields, analyses, cvData, jobContext);
+        console.log('Content generation complete');
+      }
 
       // Step 6: Fill the form
       console.log('Filling form fields...');
@@ -128,7 +172,7 @@ class AutoFiller {
       return {
         success: true,
         fieldsDetected: fields.length,
-        fieldsAnalyzed: analyses.length,
+        fieldsAnalyzed: fillData.length,
         fieldsFilled: fillResults.filled,
         fieldsSkipped: fillResults.skipped,
         fieldsFailed: fillResults.failed,

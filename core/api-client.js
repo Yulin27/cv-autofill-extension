@@ -5,16 +5,12 @@
 
 import { CONFIG } from '../config/config.js';
 
-// Backend API configuration
-const API_BASE_URL = 'http://localhost:8000/api/v1'; // Change in production
-const API_TIMEOUT = 30000; // 30 seconds
-
 export class APIClient {
   /**
    * Initialize API client (no authentication required)
    */
   constructor() {
-    this.baseUrl = API_BASE_URL;
+    this.baseUrl = `${CONFIG.BACKEND_URL}${CONFIG.BACKEND_API_BASE}`;
   }
 
   /**
@@ -35,7 +31,7 @@ export class APIClient {
 
     // Setup timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+    const timeoutId = setTimeout(() => controller.abort(), CONFIG.API_TIMEOUT_MS);
 
     try {
       const response = await fetch(url, {
