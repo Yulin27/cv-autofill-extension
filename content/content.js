@@ -147,11 +147,13 @@ class AutoFiller {
         const batchStart = Date.now();
         let batchResult;
         try {
+          // Pass cvData to backend to ensure it uses the latest edited data
           batchResult = await this.apiClient.analyzeAndGenerateBatch(
             fields,
             this.apiKey,
             this.provider,
-            jobContext
+            jobContext,
+            cvData  // Include current CV data from Chrome storage
           );
           console.log(`Backend processing completed in ${Date.now() - batchStart}ms`);
         } catch (error) {

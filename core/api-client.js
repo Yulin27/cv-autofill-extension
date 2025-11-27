@@ -167,23 +167,31 @@ export class APIClient {
    * @param {string} apiKey - LLM API key
    * @param {string} provider - LLM provider
    * @param {Object} pageContext - Page context
+   * @param {Object} cvData - CV data (optional - will use backend cache if not provided)
    * @returns {Promise<Object>} - Batch results
    */
-  async analyzeAndGenerateBatch(fields, apiKey, provider = 'openai', pageContext = null) {
+  async analyzeAndGenerateBatch(fields, apiKey, provider = 'openai', pageContext = null, cvData = null) {
     // Add page context to each field
     const fieldsWithContext = fields.map(field => ({
       ...field,
       page_context: pageContext
     }));
 
+    const requestBody = {
+      fields: fieldsWithContext,
+      api_key: apiKey,
+      provider: provider,
+      page_context: pageContext
+    };
+
+    // Include CV data if provided (ensures backend uses latest data)
+    if (cvData) {
+      requestBody.cv_data = cvData;
+    }
+
     return await this._request('/agents/analyze-and-generate', {
       method: 'POST',
-      body: JSON.stringify({
-        fields: fieldsWithContext,
-        api_key: apiKey,
-        provider: provider,
-        page_context: pageContext
-      })
+      body: JSON.stringify(requestBody)
     });
   }
 

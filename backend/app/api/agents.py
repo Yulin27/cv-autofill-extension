@@ -81,7 +81,8 @@ async def analyze_and_generate_batch(
     fields: list = Body(...),
     api_key: str = Body(...),
     provider: str = Body("openai"),
-    page_context: dict = Body(None)
+    page_context: dict = Body(None),
+    cv_data: dict = Body(None)
 ):
     """
     Batch endpoint for analyzing fields and generating content (No authentication required)
@@ -102,12 +103,14 @@ async def analyze_and_generate_batch(
         "page_context": {
             "company": "Company Name",
             "job_title": "Job Title"
-        }
+        },
+        "cv_data": { ... } (optional - if not provided, will fetch from Redis)
     }
     """
     try:
-        # Get CV data from Redis
-        cv_data = await redis_client.get(CACHE_KEY)
+        # If CV data is provided in request, use it; otherwise get from Redis
+        if not cv_data:
+            cv_data = await redis_client.get(CACHE_KEY)
 
         if not cv_data:
             raise HTTPException(
