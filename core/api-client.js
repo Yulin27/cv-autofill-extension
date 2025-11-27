@@ -55,7 +55,12 @@ export class APIClient {
       clearTimeout(timeoutId);
 
       if (error.name === 'AbortError') {
-        throw new Error('API request timed out');
+        throw new Error('Backend API request timed out. The form has many fields and processing is taking longer than expected. Please try again or contact support if this persists.');
+      }
+
+      // Add more context to network errors
+      if (error.message.includes('fetch')) {
+        throw new Error(`Cannot connect to backend at ${this.baseUrl}. Make sure the backend server is running.`);
       }
 
       throw error;

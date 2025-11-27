@@ -31,13 +31,13 @@ export const CONFIG = {
   TEMPERATURE_GENERATION: 0.7, // Higher temperature for creative content generation
   TEMPERATURE_PARSING: 0.2, // Very low for structured data extraction
 
-  // Chrome Storage Keys
-  STORAGE_KEY_CV_DATA: "cvData",
-  STORAGE_KEY_API_KEY: "openaiApiKey",
-  STORAGE_KEY_ANTHROPIC_API_KEY: "anthropicApiKey",
-  STORAGE_KEY_GROQ_API_KEY: "groqApiKey",
+  // Chrome Storage Keys (must match popup/constants.ts)
+  STORAGE_KEY_CV_DATA: "cv_assistant_data",
+  STORAGE_KEY_API_KEY: "cv_assistant_api_key_openai",
+  STORAGE_KEY_ANTHROPIC_API_KEY: "cv_assistant_api_key_anthropic",
+  STORAGE_KEY_GROQ_API_KEY: "cv_assistant_api_key_groq",
   STORAGE_KEY_CV_TEXT: "cvRawText",
-  STORAGE_KEY_LLM_PROVIDER: "llmProvider", // 'openai', 'anthropic', or 'groq'
+  STORAGE_KEY_LLM_PROVIDER: "cv_assistant_provider", // 'openai', 'anthropic', or 'groq'
 
   // API Retry Configuration
   MAX_RETRIES: 3,
@@ -51,7 +51,7 @@ export const CONFIG = {
   MAX_PDF_SIZE_MB: 10,
 
   // Timeouts
-  API_TIMEOUT_MS: 30000, // 30 second timeout for API calls
+  API_TIMEOUT_MS: 30000, // 30 second timeout for API calls (complex forms can take time)
 };
 
 // Validation helpers

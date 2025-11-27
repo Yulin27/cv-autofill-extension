@@ -51,14 +51,24 @@ class AutoFiller {
       console.log('AutoFiller mode:', this.useBackend ? 'BACKEND API' : 'DIRECT LLM');
 
       // Get provider and API key from storage
+      // DEBUG: Log all storage keys to diagnose the issue
+      const allStorage = await chrome.storage.local.get(null);
+      console.log('[DEBUG] All storage keys:', Object.keys(allStorage));
+      console.log('[DEBUG] Storage contents:', allStorage);
+
       const provider = await StorageManager.getLLMProvider();
+      console.log('[DEBUG] Provider:', provider);
+
       let apiKey;
       if (provider === 'anthropic') {
         apiKey = await StorageManager.getAnthropicAPIKey();
+        console.log('[DEBUG] Anthropic API key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT FOUND');
       } else if (provider === 'groq') {
         apiKey = await StorageManager.getGroqAPIKey();
+        console.log('[DEBUG] Groq API key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT FOUND');
       } else {
         apiKey = await StorageManager.getAPIKey();
+        console.log('[DEBUG] OpenAI API key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT FOUND');
       }
 
       if (!apiKey) {
@@ -132,15 +142,26 @@ class AutoFiller {
       if (this.useBackend) {
         // ===== BACKEND MODE: Use batch API =====
         console.log('Using backend API for field analysis and content generation...');
+        console.log(`Provider: ${this.provider}, Fields to process: ${fields.length}`);
 
         const batchStart = Date.now();
-        const batchResult = await this.apiClient.analyzeAndGenerateBatch(
-          fields,
-          this.apiKey,
-          this.provider,
-          jobContext
-        );
-        console.log(`Backend processing completed in ${Date.now() - batchStart}ms`);
+        let batchResult;
+        try {
+          batchResult = await this.apiClient.analyzeAndGenerateBatch(
+            fields,
+            this.apiKey,
+            this.provider,
+            jobContext
+          );
+          console.log(`Backend processing completed in ${Date.now() - batchStart}ms`);
+        } catch (error) {
+          // Add helpful context for common errors
+          if (error.message.includes('No CV data found')) {
+            console.error('CV data not found in backend. Did you upload your CV with USE_BACKEND enabled?');
+            throw new Error('CV data not found in backend. Please re-upload your CV and try again.');
+          }
+          throw error;
+        }
 
         // Transform backend result into fillData format
         fillData = batchResult.results.map((result, i) => ({
@@ -149,6 +170,15 @@ class AutoFiller {
           content: result.content,
           shouldFill: result.content !== null && result.content !== ''
         }));
+
+        // Log detailed results for debugging
+        console.log('[DEBUG] Fill data details:');
+        fillData.forEach((data, index) => {
+          console.log(`  Field ${index + 1}: ${data.field.label || data.field.name}`);
+          console.log(`    - Strategy: ${data.analysis?.strategy || 'unknown'}`);
+          console.log(`    - Content: ${data.content ? (data.content.length > 50 ? data.content.substring(0, 50) + '...' : data.content) : 'NULL'}`);
+          console.log(`    - Should fill: ${data.shouldFill}`);
+        });
 
       } else {
         // ===== DIRECT MODE: Use local agents =====
@@ -250,19 +280,25 @@ class AutoFiller {
     let failed = 0;
 
     for (const data of fillData) {
+      const fieldLabel = data.field.label || data.field.name;
+
       if (!data.shouldFill || !data.content) {
+        console.log(`[SKIP] Field: ${fieldLabel} - Reason: ${!data.content ? 'No content' : 'Should not fill'}`);
         skipped++;
         continue;
       }
 
       try {
+        console.log(`[FILL] Field: ${fieldLabel} - Content: ${data.content.substring(0, 50)}${data.content.length > 50 ? '...' : ''}`);
         const success = this._setFieldValue(data.field.element, data.content);
 
         if (success) {
           filled++;
+          console.log(`[SUCCESS] Filled: ${fieldLabel}`);
           // Highlight the field briefly
           this._highlightField(data.field.element);
         } else {
+          console.log(`[FAILED] Could not fill: ${fieldLabel}`);
           failed++;
         }
 
@@ -270,7 +306,7 @@ class AutoFiller {
         await delay(CONFIG.FILL_DELAY_MS);
 
       } catch (error) {
-        console.error(`Error filling field ${data.field.name}:`, error);
+        console.error(`[ERROR] Error filling field ${fieldLabel}:`, error);
         failed++;
       }
     }
@@ -497,7 +533,7 @@ class AutoFiller {
 const autoFiller = new AutoFiller();
 
 // Listen for messages from popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === 'fillForm') {
     // Handle async response
     autoFiller.fillForm()
